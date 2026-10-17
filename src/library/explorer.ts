@@ -1,0 +1,371 @@
+import {
+  CanvasTexture,
+  Color,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshPhysicalMaterial,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Texture,
+  Vector3,
+} from 'three';
+import type { ExplorerEntry, ManifestObject } from '../assets/types.js';
+import {
+  canvasTextureSource,
+  drawFinderAppIcon,
+  drawFinderWindow,
+  drawParkPoster,
+  drawSofaPhoto,
+  makeLabelCanvas,
+  type FinderSection,
+} from '../assets/drawn.js';
+import { loadTexture } from '../assets/loaders.js';
+import { config } from '../config.js';
+import { layoutExplorerCards, type CardLayout } from './layout.js';
+import type { FilmProgress } from '../conversion/types.js';
+
+export const FINDER_WIDTH = 0.84;
+export const FINDER_HEIGHT = 0.54;
+const DOCK_SIZE = 0.13;
+
+export interface ExplorerCard {
+  id: string;
+  type: ExplorerEntry['type'];
+  mesh: Mesh;
+  layout: CardLayout;
+  glow: Mesh;
+  label?: Mesh;
+}
+
+export class FileExplorer {
+  readonly group = new Group();
+  readonly photoGroup = new Group();
+  readonly iconGroup = new Group();
+  cards: ExplorerCard[] = [];
+  openPhoto: Mesh | null = null;
+  visible = false;
+  folder: FinderSection = 'pictures';
+  private panel!: Mesh;
+  private closeHit!: Mesh;
+  private sidebarHits: Mesh[] = [];
+  private hoverId: string | null = null;
+  private layouts: CardLayout[] = [];
+  private readonly world = new Vector3();
+
+  constructor(
+    private readonly entries: ExplorerEntry[],
+    private readonly objects: ManifestObject[],
+  ) {
+    this.group.name = 'file-explorer';
+    this.group.visible = false;
+    this.photoGroup.name = 'open-photo';
+    this.photoGroup.visible = false;
+    this.iconGroup.name = 'finder-app-icon';
+    this.buildWindow();
+    this.buildDockIcon();
+  }
+
+  async init(): Promise<void> {
+    this.layouts = layoutExplorerCards(this.entries, FINDER_WIDTH);
+    for (const layout of this.layouts) {
+      const texture = await this.cardTexture(layout);
+      const mesh = new Mesh(
+        new PlaneGeometry(layout.width, layout.height),
+        new MeshBasicMaterial({ map: texture }),
+      );
+      mesh.position.set(layout.x, layout.y, 0.012);
+      mesh.userData.cardId = layout.id;
+      const glow = new Mesh(
+        new PlaneGeometry(layout.width * 1.12, layout.height * 1.12),
+        new MeshBasicMaterial({
+          color: new Color('#0a84ff'),
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        }),
+      );
+      glow.position.set(layout.x, layout.y, 0.008);
+      const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
+      const label = new Mesh(
+        new PlaneGeometry(0.16, 0.032),
+        new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
+      );
+      label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
+      this.group.add(glow, mesh, label);
+      const card: ExplorerCard = { id: layout.id, type: layout.type, mesh, layout, glow, label };
+      this.cards.push(card);
+    }
+    this.applyFolder();
+  }
+
+  placeDock(chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    const rightX = -forward.z;
+    const rightZ = forward.x;
+    this.iconGroup.visible = !this.photoGroup.visible;
+    this.iconGroup.position.set(
+      chest.x + forward.x * 0.5 + rightX * -0.34,
+      chest.y + 0.08,
+      chest.z + forward.z * 0.5 + rightZ * -0.34,
+    );
+    this.iconGroup.lookAt(chest.x, chest.y + 0.08, chest.z);
+  }
+
+  setOpen(open: boolean, chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    this.visible = open;
+    this.group.visible = open && !this.photoGroup.visible;
+    if (!open) return;
+    this.group.position.set(
+      chest.x + forward.x * config.explorerDistance,
+      chest.y + 0.04,
+      chest.z + forward.z * config.explorerDistance,
+    );
+    this.group.lookAt(chest.x, chest.y, chest.z);
+  }
+
+  hover(id: string | null): void {
+    this.hoverId = id;
+    for (const card of this.cards) {
+      const on = card.id === id;
+      card.mesh.position.z = on ? 0.018 : 0.012;
+      (card.glow.material as MeshBasicMaterial).opacity = on ? 0.28 : 0;
+    }
+  }
+
+  setMovieProgress(progress: FilmProgress): void {
+    const card = this.cards.find((item) => item.type === 'video');
+    if (!card?.label) return;
+    const base = `${card.id}.mp4`;
+    const word =
+      progress.status === 'ready'
+        ? `${base}  Ready`
+        : progress.status === 'failed'
+          ? `${base}  Failed`
+          : progress.status === 'processing'
+            ? `${base}  Processing`
+            : base;
+    const map = new CanvasTexture(makeLabelCanvas(word, true));
+    (card.label.material as MeshBasicMaterial).map?.dispose();
+    (card.label.material as MeshBasicMaterial).map = map;
+  }
+
+  dimOthers(exceptId: string | null, dim: boolean): void {
+    for (const card of this.cards) {
+      const mat = card.mesh.material as MeshBasicMaterial;
+      mat.opacity = dim && card.id !== exceptId ? 0.35 : 1;
+      mat.transparent = mat.opacity < 1;
+    }
+  }
+
+  async openPhotoPrint(
+    id: string,
+    chest: { x: number; y: number; z: number },
+    forward: { x: number; z: number },
+  ): Promise<Mesh> {
+    this.photoGroup.clear();
+    const object = this.objects.find((item) => item.id === id);
+    const texture = await this.photoTexture(object);
+    const image = texture.image as { width?: number; height?: number } | undefined;
+    const aspect = image?.width && image.height ? image.height / image.width : 4 / 3;
+    const width = config.openPhotoWidth;
+    const height = width * aspect;
+    const mesh = new Mesh(
+      new PlaneGeometry(width, height),
+      new MeshPhysicalMaterial({ map: texture, roughness: 0.4 }),
+    );
+    mesh.userData.photoSize = { width, height };
+    mesh.position.set(
+      chest.x + forward.x * 0.45,
+      chest.y,
+      chest.z + forward.z * 0.45,
+    );
+    mesh.lookAt(chest.x, chest.y + 0.05, chest.z);
+    mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
+    const shadow = new Mesh(
+      new PlaneGeometry(width * 1.05, height * 1.05),
+      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }),
+    );
+    shadow.position.copy(mesh.position);
+    shadow.position.y -= 0.01;
+    shadow.quaternion.copy(mesh.quaternion);
+    this.photoGroup.add(shadow, mesh);
+    this.photoGroup.visible = true;
+    this.group.visible = false;
+    this.iconGroup.visible = false;
+    this.openPhoto = mesh;
+    this.dimOthers(id, true);
+    return mesh;
+  }
+
+  closePhoto(): void {
+    this.photoGroup.visible = false;
+    this.openPhoto = null;
+    this.dimOthers(null, false);
+    this.group.visible = this.visible;
+    this.iconGroup.visible = true;
+  }
+
+  hitIcon(point: { x: number; y: number; z: number }, radius = 0.08): boolean {
+    if (!this.iconGroup.visible) return false;
+    this.iconGroup.updateWorldMatrix(true, true);
+    this.iconGroup.getWorldPosition(this.world);
+    return this.world.distanceTo(point as never) < radius;
+  }
+
+  hitClose(point: { x: number; y: number; z: number }, radius = 0.05): boolean {
+    if (!this.visible || !this.group.visible) return false;
+    this.closeHit.updateWorldMatrix(true, true);
+    this.closeHit.getWorldPosition(this.world);
+    return this.world.distanceTo(point as never) < radius;
+  }
+
+  hitFolder(point: { x: number; y: number; z: number }, radius = 0.05): FinderSection | null {
+    if (!this.visible || !this.group.visible) return null;
+    this.group.updateWorldMatrix(true, true);
+    let best: FinderSection | null = null;
+    let bestD = radius;
+    for (const mesh of this.sidebarHits) {
+      mesh.getWorldPosition(this.world);
+      const d = this.world.distanceTo(point as never);
+      if (d < bestD) {
+        best = mesh.userData.folder as FinderSection;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  setFolder(folder: FinderSection): void {
+    if (this.folder === folder) return;
+    this.folder = folder;
+    this.paintWindow();
+    this.applyFolder();
+  }
+
+  hitTest(point: { x: number; y: number; z: number }, radius = 0.06): ExplorerCard | null {
+    if (!this.visible || !this.group.visible) return null;
+    let best: ExplorerCard | null = null;
+    let bestD = radius;
+    this.group.updateWorldMatrix(true, true);
+    for (const card of this.cards) {
+      if (!card.mesh.visible) continue;
+      card.mesh.getWorldPosition(this.world);
+      const d = this.world.distanceTo(point as never);
+      if (d < bestD) {
+        best = card;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  processingVisual(progress: number): void {
+    this.setMovieProgress({ status: 'processing', progress });
+  }
+
+  private buildWindow(): void {
+    this.panel = new Mesh(
+      new PlaneGeometry(FINDER_WIDTH, FINDER_HEIGHT),
+      new MeshBasicMaterial({ map: this.chromeTexture() }),
+    );
+    this.panel.userData.finderWindow = true;
+    this.closeHit = new Mesh(
+      new PlaneGeometry(0.028, 0.028),
+      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+    );
+    this.closeHit.position.set(-FINDER_WIDTH * 0.44, FINDER_HEIGHT * 0.42, 0.01);
+    this.closeHit.userData.close = true;
+    const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
+    const sideX = -FINDER_WIDTH * 0.39;
+    folders.forEach((id, index) => {
+      const hit = new Mesh(
+        new PlaneGeometry(FINDER_WIDTH * 0.18, 0.048),
+        new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+      );
+      hit.position.set(sideX, 0.174 - index * 0.034, 0.012);
+      hit.userData.folder = id;
+      this.sidebarHits.push(hit);
+      this.group.add(hit);
+    });
+    this.group.add(this.panel, this.closeHit);
+  }
+
+  private chromeTexture(): CanvasTexture {
+    const count = this.visibleCount();
+    return new CanvasTexture(
+      canvasTextureSource((ctx, w, h) => drawFinderWindow(ctx, w, h, this.folder, count), 1024, 640),
+    );
+  }
+
+  private paintWindow(): void {
+    const map = this.chromeTexture();
+    const mat = this.panel.material as MeshBasicMaterial;
+    mat.map?.dispose();
+    mat.map = map;
+    mat.needsUpdate = true;
+  }
+
+  private visibleCount(): number {
+    return this.cards.filter((card) => this.cardVisible(card)).length;
+  }
+
+  private cardVisible(card: ExplorerCard): boolean {
+    if (this.folder === 'favorites') return true;
+    if (this.folder === 'pictures') return card.type === 'photo';
+    return card.type === 'video';
+  }
+
+  private applyFolder(): void {
+    for (const card of this.cards) {
+      const on = this.cardVisible(card);
+      card.mesh.visible = on;
+      card.glow.visible = on;
+      if (card.label) card.label.visible = on;
+    }
+  }
+
+  private buildDockIcon(): void {
+    const texture = new CanvasTexture(canvasTextureSource(drawFinderAppIcon, 256, 256));
+    const mesh = new Mesh(
+      new PlaneGeometry(DOCK_SIZE, DOCK_SIZE),
+      new MeshBasicMaterial({ map: texture, transparent: true }),
+    );
+    mesh.userData.appIcon = true;
+    const hit = new Mesh(
+      new PlaneGeometry(DOCK_SIZE * 1.35, DOCK_SIZE * 1.55),
+      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+    );
+    hit.position.z = -0.002;
+    hit.userData.appIcon = true;
+    const caption = new Mesh(
+      new PlaneGeometry(0.16, 0.03),
+      new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas('Finder', true)), transparent: true }),
+    );
+    caption.position.y = -DOCK_SIZE * 0.72;
+    caption.userData.appIcon = true;
+    this.iconGroup.add(hit, mesh, caption);
+  }
+
+  private async cardTexture(layout: CardLayout): Promise<Texture> {
+    if (layout.type === 'photo') {
+      const object = this.objects.find((item) => item.id === layout.id);
+      return this.photoTexture(object);
+    }
+    try {
+      return await loadTexture('assets/movie/poster.jpg');
+    } catch {
+      return new CanvasTexture(canvasTextureSource(drawParkPoster, 640, 360));
+    }
+  }
+
+  private async photoTexture(object: ManifestObject | undefined): Promise<Texture> {
+    if (object?.photo) {
+      try {
+        return await loadTexture(object.photo);
+      } catch {
+        /* fall through */
+      }
+    }
+    return new CanvasTexture(canvasTextureSource(drawSofaPhoto));
+  }
+}

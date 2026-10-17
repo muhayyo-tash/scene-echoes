@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scene Echoes Animation Lab</title>
+    <style>
+      html, body { margin: 0; height: 100%; font-family: ui-sans-serif, system-ui, sans-serif; background: #1b1f1d; color: #e8eee9; }
+      #ui { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto; pointer-events: none; }
+      #ui > * { pointer-events: auto; }
+      header, footer { padding: 10px 14px; background: rgba(10,14,12,0.82); z-index: 2; }
+      nav { display: flex; gap: 8px; flex-wrap: wrap; }
+      button, select, input { font: inherit; }
+      .tab { padding: 6px 10px; border: 0; border-radius: 8px; background: #2c3833; color: inherit; }
+      .tab[aria-selected="true"] { background: #dff6e8; color: #122017; }
+      #panel { position: absolute; right: 12px; top: 108px; width: min(280px, calc(100% - 24px)); max-height: calc(100% - 170px); overflow: auto; background: rgba(12,18,16,0.9); padding: 12px; border-radius: 12px; z-index: 1; }
+      label { display: block; margin: 8px 0; font-size: 12px; }
+      input[type="range"] { width: 100%; }
+      #readout { font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+      #note { font-size: 12px; color: #c5d7cb; }
+      canvas { display: block; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <canvas id="lab"></canvas>
+    <div id="ui">
+      <header>
+        <nav>
+          <button class="tab" data-tab="conversion" aria-selected="true">Conversion</button>
+          <button class="tab" data-tab="furniture">Furniture</button>
+          <button class="tab" data-tab="book">Book</button>
+          <button class="tab" data-tab="movie">Movie</button>
+          <button class="tab" data-tab="hotspot">Hotspot picker</button>
+        </nav>
+      </header>
+      <div></div>
+      <footer>
+        <div id="note">Hand feel, real surfaces and lighting are approximated here. Final feel must be judged in the headset.</div>
+      </footer>
+    </div>
+    <aside id="panel">
+      <div id="readout"></div>
+      <div id="controls"></div>
+      <p>
+        <button id="reset">Reset to defaults</button>
+        <button id="copy-config">Copy changed values</button>
+        <button id="copy-manifest">Copy manifest entry</button>
+      </p>
+    </aside>
+    <script type="module" src="/src/lab/main.ts"></script>
+  </body>
+</html>

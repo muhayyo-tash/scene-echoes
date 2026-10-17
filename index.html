@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <link rel="icon" href="data:," />
+    <title>Scene Echoes</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0e1412; color: #e8f6ec; font-family: Georgia, serif; }
+      #scene-container { position: fixed; inset: 0; }
+      #landing {
+        position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 28px;
+        background: radial-gradient(circle at 50% 30%, #1d2a24, #0e1412 70%);
+      }
+      #landing[hidden] { display: none; }
+      h1 { font-weight: 400; font-size: 42px; letter-spacing: 0.04em; margin: 0; }
+      p { margin: 0; max-width: 28rem; text-align: center; color: #c5d7cb; }
+      #enter {
+        width: min(86vw, 360px); height: 88px; border: 0; border-radius: 18px;
+        font-size: 28px; font-family: inherit; background: #dff6e8; color: #14201b;
+      }
+      #support { color: #f3d9a6; max-width: 26rem; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div id="scene-container"></div>
+    <div id="landing">
+      <h1>Scene Echoes</h1>
+      <p>Pictures and films that echo into your room.</p>
+      <button id="enter" type="button">Enter</button>
+      <p id="support" hidden></p>
+    </div>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>
