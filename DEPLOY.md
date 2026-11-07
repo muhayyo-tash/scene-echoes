@@ -32,7 +32,7 @@ Drop files into `public/assets/` as described in the README, then:
 ```bash
 npm run validate-timeline
 git add public/assets
-git commit -m "Add real sofa, book and park film assets."
+git commit -m "Add real sofa, book and film assets."
 git push
 ```
 

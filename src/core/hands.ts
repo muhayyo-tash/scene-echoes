@@ -14,6 +14,8 @@ export interface HandSample {
   palm: Vec3 | null;
   palmNormal: Vec3 | null;
   wrist: Vec3 | null;
+  rayOrigin: Vec3 | null;
+  rayDirection: Vec3 | null;
 }
 
 export interface HandRuntime {
@@ -27,6 +29,9 @@ export interface HandRuntime {
   palm: Vec3 | null;
   palmNormal: Vec3 | null;
   wrist: Vec3 | null;
+  rayOrigin: Vec3 | null;
+  rayDirection: Vec3 | null;
+  justPinched: boolean;
   velocity: Vec3;
   open: boolean;
   longPress: LongPressState;
@@ -55,6 +60,9 @@ function emptyHand(handedness: 'left' | 'right'): HandRuntime {
     palm: null,
     palmNormal: null,
     wrist: null,
+    rayOrigin: null,
+    rayDirection: null,
+    justPinched: false,
     velocity: { x: 0, y: 0, z: 0 },
     open: false,
     longPress: createLongPressState(),
@@ -91,6 +99,9 @@ export function updateHandRuntime(
     hand.pinched = false;
     hand.pinch.pinched = false;
     hand.pinchPosition = null;
+    hand.rayOrigin = null;
+    hand.rayDirection = null;
+    hand.justPinched = false;
     return null;
   }
   hand.lost = false;
@@ -101,6 +112,8 @@ export function updateHandRuntime(
   hand.palm = sample.palm;
   hand.palmNormal = sample.palmNormal;
   hand.wrist = sample.wrist;
+  hand.rayOrigin = sample.rayOrigin;
+  hand.rayDirection = sample.rayDirection;
   if (prev && sample.wrist && dt > 0) {
     const alpha = 0.35;
     const vx = (sample.wrist.x - prev.x) / dt;
@@ -114,7 +127,9 @@ export function updateHandRuntime(
   }
   const dist =
     sample.thumbTip && sample.indexTip ? distance3(sample.thumbTip, sample.indexTip) : 1;
+  const wasPinched = hand.pinched;
   hand.pinched = updatePinch(hand.pinch, dist, config.pinchOnDistance, config.pinchOffDistance);
+  hand.justPinched = hand.pinched && !wasPinched;
   hand.pinchPosition =
     hand.pinched && sample.thumbTip && sample.indexTip
       ? pinchMidpoint(sample.thumbTip, sample.indexTip)
@@ -196,6 +211,8 @@ export function sampleFromJoints(
     palm,
     palmNormal,
     wrist,
+    rayOrigin: null,
+    rayDirection: null,
   };
 }
 

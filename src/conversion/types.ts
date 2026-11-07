@@ -11,8 +11,17 @@ export interface ModelProgress {
   status: 'queued' | 'processing' | 'done' | 'failed';
 }
 
+export interface ConversionPoint {
+  x: number;
+  y: number;
+  /** JPEG/PNG as a data URL or raw base64. Used instead of the bundled photo. */
+  image?: string;
+  /** When false, live conversion errors are thrown instead of loading a bundled GLB. */
+  allowFallback?: boolean;
+}
+
 export interface ModelSource {
-  request(id: string, point?: { x: number; y: number }): Promise<ModelHandle>;
+  request(id: string, point?: ConversionPoint): Promise<ModelHandle>;
   subscribe(listener: (progress: ModelProgress) => void): () => void;
 }
 

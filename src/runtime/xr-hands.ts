@@ -1,6 +1,7 @@
 import type { World } from '@iwsdk/core';
 import type { HandSample } from '../core/hands.js';
 import { sampleFromJoints } from '../core/hands.js';
+import { rayFromOrientation } from '../core/pointer-ray.js';
 import type { Vec3 } from '../core/touch.js';
 
 const JOINTS = [
@@ -41,6 +42,12 @@ export function samplesFromFrame(
       }
     }
     const sample = sampleFromJoints(handedness, joints);
+    const rayPose = frame.getPose(source.targetRaySpace, world.xrReferenceSpace);
+    if (rayPose) {
+      const ray = rayFromOrientation(rayPose.transform.position, rayPose.transform.orientation);
+      sample.rayOrigin = ray.origin;
+      sample.rayDirection = ray.direction;
+    }
     if (handedness === 'left') left = sample;
     else right = sample;
   }

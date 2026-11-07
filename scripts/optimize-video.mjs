@@ -1,11 +1,13 @@
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeFilmsIndex } from './list-films.mjs';
 
 const input = process.argv[2];
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const output = join(root, 'public/assets/movie/park.mp4');
+const stem = input ? basename(input).replace(/\.[^.]+$/, '') : 'film';
+const output = join(root, 'public/assets/movie', `${stem}.mp4`);
 if (!input) {
   console.log('Usage: npm run optimize-video -- <input>');
   process.exit(input ? 1 : 0);
@@ -22,6 +24,7 @@ try {
   execSync(`ffprobe -v error -show_entries format=duration,size -of default=nw=1 ${JSON.stringify(output)}`, {
     stdio: 'inherit',
   });
+  writeFilmsIndex();
 } catch {
   console.error('ffmpeg is required for optimize-video');
   process.exit(1);

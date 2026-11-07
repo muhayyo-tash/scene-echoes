@@ -137,6 +137,11 @@ void (async () => {
     } catch {
       /* audio is optional in the desktop preview */
     }
+    try {
+      await app.prepareCamera();
+    } catch {
+      /* headset camera is optional until the user long-presses a real object */
+    }
     landing?.setAttribute('hidden', '');
     if (missing) {
       app.enableDesktopPreview(world.camera, world.renderer.domElement);
@@ -144,6 +149,7 @@ void (async () => {
     }
     try {
       await Promise.resolve(world.launchXR({ sessionMode: SessionMode.ImmersiveAR }));
+      void app.prepareCamera();
     } catch {
       app.enableDesktopPreview(world.camera, world.renderer.domElement);
     }

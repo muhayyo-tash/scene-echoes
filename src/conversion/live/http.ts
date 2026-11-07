@@ -9,6 +9,7 @@ export interface ConversionStatus {
   realSize?: number;
   up?: 'y' | 'z';
   error?: string;
+  label?: string;
   timelineUrl?: string;
   manifestUrl?: string;
 }

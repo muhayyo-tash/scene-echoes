@@ -57,6 +57,21 @@ export function applyManifestScale(root: Group, object: ManifestObject): void {
   }
 }
 
+export function cacheModelTemplate(id: string, template: Group): void {
+  modelCache.set(id, template);
+}
+
+export async function loadGlbBytes(bytes: ArrayBuffer): Promise<Group> {
+  return new Promise((resolve, reject) => {
+    gltfLoader.parse(
+      bytes,
+      '',
+      (gltf) => resolve(gltf.scene),
+      (error) => reject(error),
+    );
+  });
+}
+
 export async function loadModel(object: ManifestObject): Promise<Group> {
   if (!object.model) {
     throw new Error(`Object ${object.id} has no GLB path`);

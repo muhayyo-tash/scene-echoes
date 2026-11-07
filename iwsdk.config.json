@@ -48,8 +48,7 @@
   },
   "dev": {
     "emulator": {
-      "device": "metaQuest3",
-      "environment": "living_room"
+      "iwer": false
     }
   }
 }

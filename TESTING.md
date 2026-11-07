@@ -20,7 +20,7 @@ Fast checks: `?fast=1` (short reveal), `?movie=ready`, `?object=duck`, `?open=so
 - [ ] Furniture: real-size scale looks right; pressing and dropping feel springy, not glitchy.
 - [ ] Book: explorer closed, nothing on screen; opening a real book (two hands on the table) and long-pressing with a finger on the page converts a real 3D object. Floor holds do nothing.
 - [ ] Movie processing: selecting the movie starts Processing, the card shows progress while the video and models load, then Ready. Reload keeps Ready.
-- [ ] Movie mode: film plays with sound and without stutter; bird flies within reach; fox walks on the real floor; rain splashes on a real surface; touching triggers a reaction; poking the screen pauses and resumes.
+- [ ] Movie mode: an MP4 in Finder starts Processing then Ready; the film plays; reconstructed objects appear; touching triggers a reaction; poking the screen pauses and resumes.
 - [ ] Whole app: nothing but the room, the explorer, the video screen and the objects is visible; frame rate stays smooth; objects do not jitter; no controller was needed.
 
 ## Notes to paste back to Cursor

@@ -42,12 +42,22 @@ export function parseDebugParams(
   };
 }
 
+function isLocalAppDev(): boolean {
+  return import.meta.env.DEV === true && import.meta.env.MODE === 'development';
+}
+
 export function applyDebugParams(params: DebugParams): void {
   if (params.fast) {
     applyConfigPatch({ popOutSeconds: 0.3, bookHoldSeconds: 0.2 });
   }
-  if (params.live && config.CONVERSION_API_URL !== CONVERSION_API_PLACEHOLDER) {
-    applyConfigPatch({ CONVERSION_MODE: 'live' as ConversionMode });
+  if (params.live || isLocalAppDev()) {
+    applyConfigPatch({
+      CONVERSION_MODE: 'live' as ConversionMode,
+      CONVERSION_API_URL:
+        config.CONVERSION_API_URL === CONVERSION_API_PLACEHOLDER ? '' : config.CONVERSION_API_URL,
+      conversionTimeoutSeconds: 400,
+      filmTimeoutSeconds: 1200,
+    });
   }
 }
 

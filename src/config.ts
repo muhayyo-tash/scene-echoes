@@ -16,7 +16,7 @@ const numericDefaults = {
   maxTriangles: 30000,
   libraryDistance: 0.55,
   libraryWidth: 0.9,
-  openBookWidth: 0.5,
+  openBookWidth: 0.42,
   moviePrepSeconds: 20,
   furnitureMinScale: 0.7,
   furnitureMaxScale: 1.3,
@@ -57,8 +57,8 @@ const numericDefaults = {
   furnitureGravity: 9.8,
   dropRestitution: 0.35,
   flickSpeed: 1.8,
-  explorerTiltDegrees: 8,
-  openPhotoTiltDegrees: 15,
+  explorerTiltDegrees: 0,
+  openPhotoTiltDegrees: 0,
   videoMinScale: 0.7,
   videoMaxScale: 1.6,
   chestOffset: 0.35,
@@ -83,7 +83,7 @@ export const DEFAULTS: Readonly<AppConfig> = Object.freeze({
   CONVERSION_API_URL: CONVERSION_API_PLACEHOLDER,
   explorerDistance: numericDefaults.libraryDistance,
   explorerWidth: numericDefaults.libraryWidth,
-  openPhotoWidth: 0.8,
+  openPhotoWidth: 0.42,
 });
 
 export const config: AppConfig = {

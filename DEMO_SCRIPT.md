@@ -16,18 +16,18 @@ Record in the headset. No child or other identifiable person, brand, logo or num
 
 ## 0:55–1:15 Movie processing
 
-**Shot:** Explorer, park film card. The word Processing, then Ready after the film and models have loaded.
+**Shot:** Explorer, an MP4 card. The word Processing, then Ready after frames are reconstructed.
 
 **VO:** "Pick a film. It processes, then it is ready."
 
 ## 1:15–2:30 Movie mode
 
-**Shot:** Ready card opens a floating screen. Park film plays. Bird flies within reach. Fox walks on the real floor. Rain splashes on a table. Touch a bird; it darts. Poke the screen to pause.
+**Shot:** Ready card opens a floating screen. The film plays. Objects from the video appear in the room. Touch one; it reacts. Poke the screen to pause.
 
-**VO:** "Watch the film, and the park steps into the room."
+**VO:** "Watch the film, and pieces of it step into the room."
 
 ## 2:30–2:50 Close
 
-**Shot:** Wide passthrough: duck, sofa, rain or bird, then a clean room as the explorer closes.
+**Shot:** Wide passthrough: sofa and film objects, then a clean room as the explorer closes.
 
 **VO:** "One day, any picture or film could echo into the room this way."

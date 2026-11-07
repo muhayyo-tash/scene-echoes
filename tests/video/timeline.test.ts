@@ -11,7 +11,7 @@ import { parseManifest } from '../../src/assets/validate.js';
 
 describe('timeline', () => {
   it('outlines before appear and leaves after lifetime', () => {
-    const moment = { id: 'bird-1', time: 4, objectId: 'flamingo', rect: { x: 0, y: 0, width: 1, height: 1 } };
+    const moment = { id: 'obj-1', time: 4, objectId: 'prop', rect: { x: 0, y: 0, width: 1, height: 1 } };
     expect(stageForMoment(moment, 3.0, false, 1, 30)).toBe('outline');
     expect(stageForMoment(moment, 4, false, 1, 30)).toBe('appear');
     expect(stageForMoment(moment, 10, true, 1, 30)).toBe('behave');
@@ -27,15 +27,18 @@ describe('timeline', () => {
   });
 
   it('warns when two moments are closer than 6 seconds', () => {
-    const { manifest } = parseManifest(bundledManifest);
+    const objects = [
+      { id: 'bird', scene: 'movie' as const, label: 'bird', realSize: 0.3 },
+      { id: 'dog', scene: 'movie' as const, label: 'dog', realSize: 0.4 },
+    ];
     const issues = validateTimeline(
       {
         moments: [
-          { id: 'a', time: 4, objectId: 'flamingo', rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
-          { id: 'b', time: 6, objectId: 'fox', rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
+          { id: 'a', time: 4, objectId: 'bird', rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
+          { id: 'b', time: 6, objectId: 'dog', rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
         ],
       },
-      manifest.objects,
+      objects,
       30,
     );
     expect(issues.some((issue) => issue.level === 'warning')).toBe(true);
@@ -50,8 +53,11 @@ describe('timeline', () => {
     expect(issues.some((issue) => issue.level === 'error')).toBe(true);
   });
 
-  it('loads the bundled timeline', () => {
-    expect(bundledTimeline.moments).toHaveLength(3);
+  it('starts with an empty bundled timeline', () => {
+    expect(bundledTimeline.moments).toEqual([]);
+    expect(parseManifest(bundledManifest).manifest.objects.some((object) => object.scene === 'movie')).toBe(
+      false,
+    );
   });
 });
 

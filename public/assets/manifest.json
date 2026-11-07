@@ -8,7 +8,7 @@
       "model": "assets/models/sofa.glb",
       "kind": "object",
       "label": "sofa",
-      "realSize": 1.5,
+      "realSize": 0.75,
       "up": "y",
       "baseOffset": 0,
       "hotspot": { "type": "circle", "x": 0.5, "y": 0.4, "r": 0.32 }
@@ -22,42 +22,6 @@
       "realSize": 0.22,
       "up": "y",
       "baseOffset": 0
-    },
-    {
-      "id": "flamingo",
-      "scene": "movie",
-      "model": "assets/models/flamingo.glb",
-      "kind": "object",
-      "label": "bird",
-      "realSize": 0.28,
-      "up": "y",
-      "baseOffset": 0,
-      "behavior": "fly",
-      "reaction": "dart",
-      "landing": "perch",
-      "floatScale": 3
-    },
-    {
-      "id": "fox",
-      "scene": "movie",
-      "model": "assets/models/fox.glb",
-      "kind": "object",
-      "label": "fox",
-      "realSize": 0.45,
-      "up": "y",
-      "baseOffset": 0,
-      "behavior": "walk",
-      "reaction": "pause",
-      "landing": "perch",
-      "floatScale": 1
-    },
-    {
-      "id": "rain",
-      "scene": "movie",
-      "kind": "effect",
-      "label": "rain",
-      "realSize": 1.0,
-      "behavior": "rain"
     }
   ]
 }

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { writePng } from './png.mjs';
+import { writeFilmsIndex } from './list-films.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -82,15 +83,5 @@ if (!existsSync(sofaJpg)) {
 }
 toJpeg(posterPng, join(movie, 'poster.jpg'));
 
-try {
-  execSync(
-    `ffmpeg -y -f lavfi -i color=c=0x87c6ea:s=640x360:d=30:r=15 -f lavfi -i anullsrc=r=44100:cl=stereo -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -movflags +faststart ${JSON.stringify(join(movie, 'park.mp4'))}`,
-    { stdio: 'ignore' },
-  );
-} catch {
-  if (!existsSync(join(movie, 'park.mp4'))) {
-    writeFileSync(join(movie, 'README-placeholder-film.txt'), 'Add park.mp4. The app uses a canvas film until then.\n');
-  }
-}
-
+writeFilmsIndex(movie);
 console.log('Photos and film poster generated.');

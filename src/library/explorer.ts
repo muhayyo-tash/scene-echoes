@@ -15,7 +15,7 @@ import {
   canvasTextureSource,
   drawFinderAppIcon,
   drawFinderWindow,
-  drawParkPoster,
+  drawFilmPoster,
   drawSofaPhoto,
   makeLabelCanvas,
   type FinderSection,
@@ -25,9 +25,9 @@ import { config } from '../config.js';
 import { layoutExplorerCards, type CardLayout } from './layout.js';
 import type { FilmProgress } from '../conversion/types.js';
 
-export const FINDER_WIDTH = 0.84;
-export const FINDER_HEIGHT = 0.54;
-const DOCK_SIZE = 0.13;
+export const FINDER_WIDTH = 0.52;
+export const FINDER_HEIGHT = 0.34;
+const DOCK_SIZE = 0.1;
 
 export interface ExplorerCard {
   id: string;
@@ -132,8 +132,8 @@ export class FileExplorer {
     }
   }
 
-  setMovieProgress(progress: FilmProgress): void {
-    const card = this.cards.find((item) => item.type === 'video');
+  setMovieProgress(filmId: string, progress: FilmProgress): void {
+    const card = this.cards.find((item) => item.id === filmId && item.type === 'video');
     if (!card?.label) return;
     const base = `${card.id}.mp4`;
     const word =
@@ -259,8 +259,8 @@ export class FileExplorer {
     return best;
   }
 
-  processingVisual(progress: number): void {
-    this.setMovieProgress({ status: 'processing', progress });
+  processingVisual(filmId: string, progress: number): void {
+    this.setMovieProgress(filmId, { status: 'processing', progress });
   }
 
   private buildWindow(): void {
@@ -354,7 +354,7 @@ export class FileExplorer {
     try {
       return await loadTexture('assets/movie/poster.jpg');
     } catch {
-      return new CanvasTexture(canvasTextureSource(drawParkPoster, 640, 360));
+      return new CanvasTexture(canvasTextureSource(drawFilmPoster, 640, 360));
     }
   }
 

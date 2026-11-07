@@ -11,15 +11,15 @@ Ages 12 and up. Meta requires a parent-managed account for ages 10 to 12, and ag
 
 ## Description (under 500 words)
 
-Scene Echoes starts with a clean view of your real room. Nothing is added until you ask. The app is a file explorer you open with your hands: slide an open hand to the left and a glass panel appears, holding a sofa photo and a short park film. Open the photo, pinch-and-hold the sofa in the picture, and a real 3D sofa lifts off the print so you can place it on the floor or a table. Slide a hand to the right and the explorer disappears.
+Scene Echoes starts with a clean view of your real room. Nothing is added until you ask. The app is a file explorer you open with your hands: slide an open hand to the left and a glass panel appears. Open a photo, pinch-and-hold the object, and a real 3D model lifts off the print so you can place it on the floor or a table. Slide a hand to the right and the explorer disappears.
 
 Or skip the explorer. The book scene puts nothing on the screen. Open a real picture book; when two hands rest on the page and you long-press with a finger, that picture becomes a 3D object you can pick up and move.
 
-Pick the film and the card says Processing while the app actually loads the video and its 3D objects. Come back when it says Ready. A floating screen plays the film. A bird flies within reach, a fox walks on the real floor, rain falls and splashes on real surfaces. Touch them and they react. Poke the screen to pause.
+Pick an MP4 and the card says Processing while frames are named and reconstructed. Come back when it says Ready. A floating screen plays the film. Objects from the video appear in the room. Touch them and they react. Poke the screen to pause. Pinch to move them; two hands scale furniture.
 
 The app is built with the Immersive Web SDK for WebXR on Quest Browser: `immersive-ar` passthrough, hand tracking, plane and mesh detection, anchors, optional depth occlusion, and SDK grabbing. Custom code covers the explorer, long-press conversion reveal, book pose detection, furniture squash, movie timeline and behaviors. All sounds except the film soundtrack are generated in Web Audio and placed at the object.
 
-**This is a prototype.** The browser does not give apps camera pictures, so the app cannot see the printed page. An open-book hand pose (two palms apart at table height) plus a still fingertip on an elevated surface starts the book conversion. The 3D models are real GLBs bundled with the app (Khronos sample assets and three.js examples for this build). Movie Processing is a real preload of those assets, not a countdown. A cloud conversion client exists under `src/conversion/live/` but is not connected. The demo build makes no network calls.
+**This is a prototype.** The browser does not give apps camera pictures, so the app cannot see the printed page. An open-book hand pose (two palms apart at table height) plus a still fingertip on an elevated surface starts the book conversion. The sofa and duck GLBs are bundled for the hosted demo. Local development can call Gemini and SAM 3D through a same-origin Node plugin so keys never enter the Quest browser bundle. GitHub Pages stays on the bundled models.
 
 ## Scene understanding, anchors, hands and passthrough
 

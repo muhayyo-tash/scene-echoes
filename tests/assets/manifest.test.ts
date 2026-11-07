@@ -11,7 +11,7 @@ describe('manifest and explorer', () => {
     expect(manifest.objects.some((o) => o.scene === 'cat')).toBe(false);
     expect(issues.some((i) => i.level === 'error')).toBe(false);
     const { entries } = parseExplorer(bundledExplorer);
-    expect(entries.map((e) => e.type)).toEqual(['photo', 'video']);
+    expect(entries.map((e) => e.type)).toEqual(['photo']);
   });
 
   it('flags a missing required field', () => {

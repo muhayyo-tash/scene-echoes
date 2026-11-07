@@ -36,9 +36,13 @@ export class MovieScene {
   private spawned = new Set<string>();
   private activeEffects = new Set<string>();
 
-  constructor(private readonly catalog: ManifestObject[]) {
+  constructor(private catalog: ManifestObject[]) {
     this.group.name = 'movie-objects';
     this.group.add(this.rain.points);
+  }
+
+  replaceCatalog(objects: ManifestObject[]): void {
+    this.catalog = objects;
   }
 
   reset(): void {

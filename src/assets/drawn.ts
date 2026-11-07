@@ -20,51 +20,15 @@ export function drawSofaPhoto(ctx: CanvasRenderingContext2D, w: number, h: numbe
   ctx.fillRect(w * 0.72, h * 0.28, w * 0.08, h * 0.28);
 }
 
-export function drawParkPoster(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#9fd4f0');
-  sky.addColorStop(1, '#d9f0c7');
-  ctx.fillStyle = sky;
+export function drawFilmPoster(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#1d1d1f';
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#7cb56a';
+  ctx.fillStyle = '#3a3a3c';
   ctx.beginPath();
-  ctx.ellipse(w * 0.5, h * 0.95, w * 0.7, h * 0.28, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#3f7d4e';
-  ctx.beginPath();
-  ctx.moveTo(w * 0.18, h * 0.7);
-  ctx.lineTo(w * 0.3, h * 0.32);
-  ctx.lineTo(w * 0.42, h * 0.7);
-  ctx.fill();
-  ctx.fillStyle = '#5aa0d6';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.72, h * 0.28, w * 0.06, h * 0.04, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#c4a574';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.32, h * 0.72, w * 0.08, h * 0.05, 0, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-export function drawCloudFilm(ctx: CanvasRenderingContext2D, w: number, h: number, t: number): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#87c6ea');
-  sky.addColorStop(1, '#d7efc3');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (let i = 0; i < 5; i++) {
-    const x = ((t * 20 + i * 160) % (w + 120)) - 60;
-    const y = 40 + i * 28;
-    ctx.beginPath();
-    ctx.ellipse(x, y, 48, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#6aa85c';
-  ctx.fillRect(0, h * 0.72, w, h * 0.28);
-  ctx.fillStyle = '#5aa0d6';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.7 + Math.sin(t) * 20, h * 0.28, 16, 10, 0, 0, Math.PI * 2);
+  ctx.moveTo(w * 0.42, h * 0.32);
+  ctx.lineTo(w * 0.66, h * 0.5);
+  ctx.lineTo(w * 0.42, h * 0.68);
+  ctx.closePath();
   ctx.fill();
 }
 

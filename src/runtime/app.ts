@@ -11,6 +11,7 @@ import {
   Scene,
   Vector2,
   Vector3,
+  type Object3D,
   type Camera,
   type WebGLRenderer,
 } from 'three';
@@ -19,10 +20,12 @@ import { config } from '../config.js';
 import { debugParams } from '../debug/params.js';
 import { parseExplorer, parseManifest } from '../assets/validate.js';
 import type { ExplorerEntry, ManifestObject, TimelineFile } from '../assets/types.js';
-import { loadModel } from '../assets/loaders.js';
+import { cacheModelTemplate, loadGlbBytes, loadModel } from '../assets/loaders.js';
 import bundledManifest from '../../public/assets/manifest.json';
 import bundledExplorer from '../../public/assets/explorer.json';
+import bundledFilms from '../../public/assets/movie/films.json';
 import bundledTimeline from '../../public/assets/movie/timeline.json';
+import { explorerWithFilms } from '../assets/films.js';
 import { AudioEngine } from '../core/audio.js';
 import {
   createHands,
@@ -61,11 +64,13 @@ import { farPlacePoint } from '../core/placement.js';
 import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
 import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
+import { PointerRay } from '../core/pointer-ray.js';
+import { SceneCapture } from '../core/scene-capture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
-import { createModelSource, createFilmProcessing } from '../conversion/source.js';
+import { createModelSource, createFilmProcessing, type LiveFilmResult } from '../conversion/source.js';
 import { ConversionAnimation } from '../conversion/animation.js';
-import type { FilmProcessing, ModelSource } from '../conversion/types.js';
+import type { ConversionPoint, FilmProcessing, ModelSource } from '../conversion/types.js';
 import {
   dropFurniture,
   isOnFurniture,
@@ -108,6 +113,8 @@ export class SceneEchoesApp {
   ghost = createGhostHand();
   placed = new Group();
   book: BookDetector = createBookDetector();
+  leftRay = new PointerRay();
+  rightRay = new PointerRay();
   landingRing = new Mesh(
     new RingGeometry(0.08, 0.09, 32),
     new MeshBasicMaterial({ color: new Color('#dff6e8'), transparent: true, opacity: 0.4 }),
@@ -115,8 +122,11 @@ export class SceneEchoesApp {
   debug = mountDebugPanel();
   idle = 0;
   desktop = false;
+  activeFilmId: string | null = null;
   converting = false;
   conversionElapsed = 0;
+  sceneCapture = new SceneCapture();
+  private sceneCaptureBusy = false;
   pendingConverted: { object: ManifestObject; model: Group; origin: Vector3 } | null = null;
   grab:
     | { kind: 'furniture' | 'movie' | 'screen'; id: string; hand: 'left' | 'right' }
@@ -131,6 +141,9 @@ export class SceneEchoesApp {
   private carrying: Group | null = null;
   private desktopControls: OrbitControls | null = null;
   private desktopRay = new Raycaster();
+  private pointerRaycaster = new Raycaster();
+  private pointerOrigin = new Vector3();
+  private pointerDir = new Vector3();
   private desktopPointer = new Vector2();
   private seatPressed: PlacedFurniture | null = null;
   private desktopHold: {
@@ -157,7 +170,15 @@ export class SceneEchoesApp {
     createFallbackLights(this.scene);
     this.landingRing.rotation.x = -Math.PI / 2;
     this.landingRing.visible = false;
-    this.scene.add(this.placed, this.conversion.group, this.ghost, this.landingRing, this.screen.group);
+    this.scene.add(
+      this.placed,
+      this.conversion.group,
+      this.ghost,
+      this.landingRing,
+      this.screen.group,
+      this.leftRay.group,
+      this.rightRay.group,
+    );
     this.movie = new MovieScene([]);
     this.scene.add(this.movie.group);
   }
@@ -166,21 +187,27 @@ export class SceneEchoesApp {
     const manifest = parseManifest(bundledManifest);
     const explorer = parseExplorer(bundledExplorer);
     this.objects = manifest.manifest.objects;
-    this.entries = explorer.entries;
+    this.entries = explorerWithFilms(explorer.entries, bundledFilms.films ?? []);
     this.timeline = { moments: parseTimelineMoments(bundledTimeline) };
     this.explorer = new FileExplorer(this.entries, this.objects);
     await this.explorer.init();
     this.scene.add(this.explorer.group, this.explorer.photoGroup, this.explorer.iconGroup);
     this.modelSource = createModelSource(this.objects, (object) => loadModel(object));
-    this.films = createFilmProcessing(this.storage, (filmId, report) => this.preloadFilm(filmId, report));
+    this.films = createFilmProcessing(
+      this.storage,
+      (filmId, report) => this.preloadFilm(filmId, report),
+      (result) => this.applyLiveFilm(result),
+    );
     this.movie = new MovieScene(this.objects);
     this.scene.add(this.movie.group);
     await this.screen.init();
     const filmsEx = this.films as FilmProcessing & { reset?(id: string): void; markReady?(id: string): void };
-    if (debugParams.reset) filmsEx.reset?.('park');
-    if (debugParams.movieReady) filmsEx.markReady?.('park');
-    this.films.subscribe((_id, progress) => this.explorer.setMovieProgress(progress));
-    this.explorer.setMovieProgress(this.films.get('park'));
+    for (const filmId of this.filmIds()) {
+      if (debugParams.reset) filmsEx.reset?.(filmId);
+      if (debugParams.movieReady) filmsEx.markReady?.(filmId);
+      this.explorer.setMovieProgress(filmId, this.films.get(filmId));
+    }
+    this.films.subscribe((id, progress) => this.explorer.setMovieProgress(id, progress));
     if (debugParams.openId) {
       this.space = openExplorer(this.space);
     }
@@ -193,8 +220,17 @@ export class SceneEchoesApp {
     await this.audio.start();
   }
 
+  async prepareCamera(): Promise<void> {
+    const result = await this.sceneCapture.ensureStarted();
+    if (result && !result.ok) {
+      console.warn('[scene-echoes] headset camera', result.reason, result.detail);
+    }
+  }
+
   enableDesktopPreview(camera: Camera, canvas: HTMLCanvasElement): void {
     this.desktop = true;
+    this.leftRay.group.visible = false;
+    this.rightRay.group.visible = false;
     this.scene.background = new Color('#d9e4dc');
     this.renderer?.setClearAlpha(1);
     camera.position.set(0, 1.45, 2.0);
@@ -299,6 +335,7 @@ export class SceneEchoesApp {
     if (this.hands.slide === 'right') this.closeLibrary();
 
     this.updateHints(dt, input);
+    this.updatePointerRays(input);
     this.updateExplorer(dt, input);
     this.updateConversion(dt, input);
     this.updateGrab(dt, input);
@@ -322,7 +359,7 @@ export class SceneEchoesApp {
       fps: this.fps,
       filmTime: this.space.movieOpen ? this.screen.currentTime() : null,
       nextMoment: this.nextMomentLabel(),
-      movie: this.films.get('park').status,
+      movie: this.activeFilm()?.status ?? 'idle',
     });
   }
 
@@ -366,6 +403,64 @@ export class SceneEchoesApp {
     void input;
   }
 
+  private updatePointerRays(input: FrameInput): void {
+    if (this.desktop) {
+      this.leftRay.group.visible = false;
+      this.rightRay.group.visible = false;
+      return;
+    }
+    this.leftRay.update(
+      this.hands.left.rayOrigin,
+      this.hands.left.rayDirection,
+      this.pointerPick(this.hands.left)?.point ?? null,
+    );
+    this.rightRay.update(
+      this.hands.right.rayOrigin,
+      this.hands.right.rayDirection,
+      this.pointerPick(this.hands.right)?.point ?? null,
+    );
+    void input;
+  }
+
+  private pointerPick(hand: { rayOrigin: { x: number; y: number; z: number } | null; rayDirection: { x: number; y: number; z: number } | null }): {
+    object: Object3D;
+    point: Vector3;
+  } | null {
+    if (!hand.rayOrigin || !hand.rayDirection) return null;
+    this.pointerOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
+    this.pointerDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
+    this.pointerRaycaster.set(this.pointerOrigin, this.pointerDir);
+    this.pointerRaycaster.far = 4;
+    const hits = this.pointerRaycaster.intersectObjects(
+      [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
+      true,
+    );
+    const hit = hits.find((entry) => entry.object.visible);
+    return hit ? { object: hit.object, point: hit.point } : null;
+  }
+
+  private pointerKind(object: Object3D | null): {
+    kind: 'icon' | 'close' | 'folder' | 'card';
+    folder?: FinderSection;
+    cardId?: string;
+  } | null {
+    let current: Object3D | null = object;
+    while (current) {
+      const data = current.userData as {
+        appIcon?: boolean;
+        close?: boolean;
+        folder?: FinderSection;
+        cardId?: string;
+      };
+      if (data.appIcon) return { kind: 'icon' };
+      if (data.close) return { kind: 'close' };
+      if (data.folder) return { kind: 'folder', folder: data.folder };
+      if (data.cardId) return { kind: 'card', cardId: data.cardId };
+      current = current.parent;
+    }
+    return null;
+  }
+
   private updateExplorer(dt: number, input: FrameInput): void {
     if (!this.desktop) {
       this.explorer.placeDock(
@@ -377,10 +472,33 @@ export class SceneEchoesApp {
         forwardFrom(input.head.quaternion),
       );
     }
+    let hover: string | null = null;
+    for (const hand of [this.hands.left, this.hands.right]) {
+      const target = this.pointerKind(this.pointerPick(hand)?.object ?? null);
+      if (target?.kind === 'card' && target.cardId) hover = target.cardId;
+      if (!hand.justPinched || !target) continue;
+      if (target.kind === 'icon' && !this.space.explorerOpen && !this.space.photoOpen) {
+        this.openLibrary(input);
+        return;
+      }
+      if (target.kind === 'close' && this.space.explorerOpen) {
+        this.closeLibrary();
+        return;
+      }
+      if (target.kind === 'folder' && target.folder && this.space.explorerOpen) {
+        this.explorer.setFolder(target.folder);
+        return;
+      }
+      if (target.kind === 'card' && target.cardId && this.space.explorerOpen) {
+        const card = this.explorer.cards.find((item) => item.id === target.cardId);
+        if (card) void this.selectCard(card.id, card.type, input);
+        return;
+      }
+    }
     const tips = [this.hands.left.indexTip, this.hands.right.indexTip, this.hands.left.pinchPosition, this.hands.right.pinchPosition];
     const pressing =
-      this.hands.left.pinched ||
-      this.hands.right.pinched ||
+      this.hands.left.justPinched ||
+      this.hands.right.justPinched ||
       pokeSurface(this.hands.left, 0.01, dt) ||
       pokeSurface(this.hands.right, 0.01, dt);
     if (!this.space.explorerOpen && !this.space.photoOpen) {
@@ -391,8 +509,10 @@ export class SceneEchoesApp {
         }
       }
     }
-    if (!this.space.explorerOpen || this.space.photoOpen) return;
-    let hover: string | null = null;
+    if (!this.space.explorerOpen || this.space.photoOpen) {
+      this.explorer.hover(hover);
+      return;
+    }
     for (const tip of tips) {
       if (!tip) continue;
       if (this.explorer.hitClose(tip, 0.06) && pressing) {
@@ -413,8 +533,10 @@ export class SceneEchoesApp {
       }
     }
     this.explorer.hover(hover);
-    const movie = this.films.get('park');
-    if (movie.status === 'processing') this.explorer.processingVisual(movie.progress);
+    for (const filmId of this.filmIds()) {
+      const movie = this.films.get(filmId);
+      if (movie.status === 'processing') this.explorer.processingVisual(filmId, movie.progress);
+    }
     if (
       debugParams.handsLess &&
       !this.desktop &&
@@ -432,9 +554,10 @@ export class SceneEchoesApp {
       await this.openPhotoCard(id, input);
       return;
     }
-    const state = this.films.get('park');
+    this.activeFilmId = id;
+    const state = this.films.get(id);
     if (state.status === 'idle' || state.status === 'failed') {
-      await this.films.start('park');
+      await this.films.start(id);
       return;
     }
     if (state.status === 'processing') return;
@@ -476,7 +599,10 @@ export class SceneEchoesApp {
       }
       return;
     }
-    if (this.converting) return;
+    if (this.converting) {
+      this.conversion.update(0.18 + (Math.sin(this.time * 2.4) * 0.5 + 0.5) * 0.25);
+      return;
+    }
     if (this.space.photoOpen && this.explorer.openPhoto) {
       const object = this.objects.find((item) => item.scene === 'furniture');
       const photo = this.explorer.openPhoto;
@@ -495,31 +621,83 @@ export class SceneEchoesApp {
       if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
         void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
+      return;
     }
-    void input;
+    this.updateSceneHold(input);
+  }
+
+  private updateSceneHold(input: FrameInput): void {
+    if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen) return;
+    for (const hand of [this.hands.left, this.hands.right]) {
+      if (!hand.longPress.fired) continue;
+      if (this.pointerKind(this.pointerPick(hand)?.object ?? null)) continue;
+      const origin = hand.pinchPosition
+        ? new Vector3(hand.pinchPosition.x, hand.pinchPosition.y, hand.pinchPosition.z)
+        : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
+      hand.longPress.fired = false;
+      void this.beginSceneCapture(origin);
+      return;
+    }
+  }
+
+  private async beginSceneCapture(origin: Vector3): Promise<void> {
+    if (this.converting || this.sceneCaptureBusy) return;
+    this.sceneCaptureBusy = true;
+    this.converting = true;
+    this.space.space = 'converting';
+    this.conversion.start(origin, true);
+    this.audio.play('whoosh', origin);
+    try {
+      const still = await this.sceneCapture.captureStill();
+      if (!still.ok) {
+        throw new Error(`${still.reason}: ${still.detail}`);
+      }
+      console.info('[scene-echoes] scene still', still.label);
+      await this.beginConversion(`scene-${Date.now()}`, origin, true, {
+        x: 0.5,
+        y: 0.5,
+        image: still.dataUrl,
+        allowFallback: false,
+      });
+    } catch (error) {
+      console.warn('[scene-echoes] scene capture failed', error);
+      this.conversion.finish();
+      this.converting = false;
+      this.space.space = this.space.explorerOpen ? 'explorer' : 'clean';
+      this.audio.play('thud', origin);
+    } finally {
+      this.sceneCaptureBusy = false;
+    }
   }
 
   private async beginConversion(
     id: string,
     origin: Vector3,
     column: boolean,
-    uv?: { x: number; y: number },
+    point?: ConversionPoint,
   ): Promise<void> {
-    if (this.converting) return;
+    if (this.pendingConverted) return;
+    const already = this.converting;
     this.converting = true;
     this.space.space = 'converting';
-    const object = this.objects.find((item) => item.id === id);
-    if (!object) {
-      this.converting = false;
-      return;
+    if (!already) {
+      this.conversion.start(origin, column);
+      this.audio.play('whoosh', origin);
     }
-    const handle = await this.modelSource.request(id, uv);
-    const model = handle.root as Group;
-    this.conversion.attachModel(model);
-    this.conversion.start(origin, column);
-    this.audio.play('whoosh', origin);
-    this.conversionElapsed = 0;
-    this.pendingConverted = { object, model, origin };
+    try {
+      const handle = await this.modelSource.request(id, point);
+      const model = handle.root as Group;
+      this.conversion.attachModel(model);
+      this.conversionElapsed = 0;
+      this.pendingConverted = { object: handle.object, model, origin };
+    } catch (error) {
+      console.warn('[scene-echoes] conversion failed', error);
+      this.conversion.finish();
+      this.converting = false;
+      this.pendingConverted = null;
+      this.space.space = this.space.photoOpen ? 'photo' : this.space.explorerOpen ? 'explorer' : 'clean';
+      this.audio.play('thud', origin);
+    }
   }
 
   private placeConverted(object: ManifestObject, model: Group, origin: Vector3): void {
@@ -638,23 +816,17 @@ export class SceneEchoesApp {
   }
 
   private updateBookHold(input: FrameInput): void {
-    if (this.space.explorerOpen || this.space.movieOpen || this.converting) return;
+    if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen || this.converting) return;
     const floorY = floorHeight(this.surfaces.surfaces);
     for (const hand of [this.hands.left, this.hands.right]) {
       if (!hand.surfaceHold.fired || !hand.indexTip) continue;
       const near = fingertipNearSurface(hand.indexTip, this.surfaces.surfaces);
       if (!near || !isElevatedSurface(near.surface, floorY, config.bookTableAboveFloor)) continue;
-      if (!this.book.open) continue;
-      const object = this.objects.find((item) => item.scene === 'book');
-      if (object) {
-        void this.beginConversion(object.id, new Vector3(hand.indexTip.x, hand.indexTip.y, hand.indexTip.z), true);
-        hand.surfaceHold.fired = false;
-      }
+      hand.surfaceHold.fired = false;
+      void this.beginSceneCapture(new Vector3(hand.indexTip.x, hand.indexTip.y, hand.indexTip.z));
+      return;
     }
-    if (debugParams.handsLess && this.furniture.every((item) => item.object.scene !== 'book') && this.idle > config.hintIdleSeconds) {
-      const object = this.objects.find((item) => item.scene === 'book');
-      if (object) void this.beginConversion(object.id, input.head.position.clone().add(new Vector3(0, -0.4, -0.4)), true);
-    }
+    void input;
   }
 
   private async openMovie(input: FrameInput): Promise<void> {
@@ -792,13 +964,26 @@ export class SceneEchoesApp {
 
   private updateDesktopHold(): void {
     const hold = this.desktopHold;
-    if (!this.desktop || !hold || hold.fired || hold.kind !== 'photo') return;
+    if (!this.desktop || !hold || hold.fired) return;
     if ((performance.now() - hold.started) / 1000 < config.longPressSeconds) return;
-    if (!hold.point || !hold.uv) return;
-    hold.fired = true;
-    const object = this.objects.find((item) => item.scene === 'furniture');
-    if (object) void this.beginConversion(object.id, hold.point.clone(), false, hold.uv);
-    if (this.desktopControls) this.desktopControls.enabled = true;
+    if (hold.kind === 'photo') {
+      if (!hold.point || !hold.uv) return;
+      hold.fired = true;
+      const object = this.objects.find((item) => item.scene === 'furniture');
+      if (object) void this.beginConversion(object.id, hold.point.clone(), false, hold.uv);
+      if (this.desktopControls) this.desktopControls.enabled = true;
+      return;
+    }
+    if (
+      hold.kind === 'other' &&
+      !this.space.explorerOpen &&
+      !this.space.photoOpen &&
+      !this.space.movieOpen
+    ) {
+      hold.fired = true;
+      void this.beginSceneCapture(hold.point?.clone() ?? new Vector3(0, 1, -0.5));
+      if (this.desktopControls) this.desktopControls.enabled = true;
+    }
   }
 
   private clearDesktopHold(): void {
@@ -895,18 +1080,29 @@ export class SceneEchoesApp {
     };
   }
 
-  private async preloadFilm(filmId: string, report: (progress: number) => void): Promise<void> {
-    const movieObjects = this.objects.filter((item) => item.scene === 'movie' && item.kind !== 'effect');
-    const total = 1 + movieObjects.length;
-    let done = 0;
-    await this.screen.preload(filmId);
-    done += 1;
-    report(done / total);
-    for (const object of movieObjects) {
-      await loadModel(object);
-      done += 1;
-      report(done / total);
+  private async applyLiveFilm(result: LiveFilmResult): Promise<void> {
+    for (const object of result.objects) {
+      const bytes = result.glbs[object.id];
+      if (!bytes) continue;
+      cacheModelTemplate(object.id, await loadGlbBytes(bytes));
     }
+    this.movie.replaceCatalog(result.objects);
+    this.timeline = { moments: parseTimelineMoments(result.timeline) };
+    this.movie.reset();
+  }
+
+  private filmIds(): string[] {
+    return this.entries.filter((entry) => entry.type === 'video').map((entry) => entry.id);
+  }
+
+  private activeFilm() {
+    const id = this.activeFilmId ?? this.filmIds()[0];
+    return id ? this.films.get(id) : null;
+  }
+
+  private async preloadFilm(filmId: string, report: (progress: number) => void): Promise<void> {
+    await this.screen.preload(filmId);
+    report(1);
   }
 }
 

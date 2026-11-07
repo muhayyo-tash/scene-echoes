@@ -1,6 +1,8 @@
 import { config } from '../../config.js';
+import type { ManifestObject, TimelineFile } from '../../assets/types.js';
 import type { FilmProcessing, FilmProgress } from '../types.js';
 import {
+  getArrayBuffer,
   getJson,
   joinUrl,
   postJson,
@@ -8,6 +10,12 @@ import {
   type ConversionStatus,
   type TokenProvider,
 } from './http.js';
+
+export interface LiveFilmResult {
+  timeline: TimelineFile;
+  objects: ManifestObject[];
+  glbs: Record<string, ArrayBuffer>;
+}
 
 export class LiveFilmProcessing implements FilmProcessing {
   private readonly snapshots = new Map<string, FilmProgress>();
@@ -24,6 +32,7 @@ export class LiveFilmProcessing implements FilmProcessing {
       timeoutSeconds?: () => number;
       pollSeconds?: () => number;
       onComplete?: (timelineUrl: string, manifestUrl: string) => Promise<void>;
+      applyLiveFilm?: (result: LiveFilmResult) => Promise<void>;
     },
   ) {}
 
@@ -83,6 +92,26 @@ export class LiveFilmProcessing implements FilmProcessing {
       if (status.status === 'done') {
         if (status.timelineUrl && status.manifestUrl && this.options.onComplete) {
           await this.options.onComplete(status.timelineUrl, status.manifestUrl);
+        }
+        if (status.timelineUrl && status.manifestUrl && this.options.applyLiveFilm) {
+          const timeline = await getJson<TimelineFile>(
+            joinUrl(api, status.timelineUrl),
+            token,
+            fetchImpl,
+          );
+          const manifest = await getJson<{ objects?: ManifestObject[] }>(
+            joinUrl(api, status.manifestUrl),
+            token,
+            fetchImpl,
+          );
+          const objects = manifest.objects ?? [];
+          const glbs: Record<string, ArrayBuffer> = {};
+          for (const object of objects) {
+            const path = (object as ManifestObject & { modelUrl?: string }).modelUrl ?? object.model;
+            if (!path || object.kind === 'effect') continue;
+            glbs[object.id] = await getArrayBuffer(joinUrl(api, path), token, fetchImpl);
+          }
+          await this.options.applyLiveFilm({ timeline, objects, glbs });
         }
         return;
       }

@@ -1,4 +1,3 @@
 [
-  { "type": "photo", "id": "sofa" },
-  { "type": "video", "id": "park" }
+  { "type": "photo", "id": "sofa" }
 ]

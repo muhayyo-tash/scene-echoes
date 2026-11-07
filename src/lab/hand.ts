@@ -32,6 +32,8 @@ export class SimulatedHand {
       palm: p,
       palmNormal: { x: 0, y: this.palm ? -1 : 0, z: this.palm ? 0 : -1 },
       wrist: p,
+      rayOrigin: p,
+      rayDirection: { x: 0, y: 0, z: -1 },
     };
   }
 }

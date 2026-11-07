@@ -1,16 +1,17 @@
 import { config } from '../../config.js';
 import type { ManifestObject } from '../../assets/types.js';
-import type { ModelHandle, ModelProgress, ModelSource } from '../types.js';
+import type { ConversionPoint, ModelHandle, ModelProgress, ModelSource } from '../types.js';
 import {
   getArrayBuffer,
   getJson,
   isGlb,
   joinUrl,
-  postForm,
+  postJson,
   type ConversionJob,
   type ConversionStatus,
   type TokenProvider,
 } from './http.js';
+import { blobToBase64, dataUrlToBlob, markPhotoBlob } from './mark-photo.js';
 
 export class LiveConversionError extends Error {
   constructor(message: string) {
@@ -32,7 +33,8 @@ export class LiveConversionModelSource implements ModelSource {
       sleep?: (ms: number) => Promise<void>;
       timeoutSeconds?: () => number;
       pollSeconds?: () => number;
-      parseModel?: (bytes: ArrayBuffer, status: ConversionStatus) => Promise<ModelHandle>;
+      parseModel?: (bytes: ArrayBuffer, status: ConversionStatus, id: string) => Promise<ModelHandle>;
+      photoUrl?: (id: string) => string | null;
     },
   ) {}
 
@@ -41,10 +43,11 @@ export class LiveConversionModelSource implements ModelSource {
     return () => this.listeners.delete(listener);
   }
 
-  async request(id: string, point?: { x: number; y: number }): Promise<ModelHandle> {
+  async request(id: string, point?: ConversionPoint): Promise<ModelHandle> {
     try {
       return await this.requestLive(id, point);
     } catch (error) {
+      if (point?.allowFallback === false) throw error;
       if (config.CONVERSION_MODE === 'live') {
         console.warn('[scene-echoes] live conversion failed, falling back to bundled model', error);
       }
@@ -53,15 +56,45 @@ export class LiveConversionModelSource implements ModelSource {
     }
   }
 
-  private async requestLive(id: string, point?: { x: number; y: number }): Promise<ModelHandle> {
+  private async requestLive(id: string, point?: ConversionPoint): Promise<ModelHandle> {
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const token = await this.options.token.getToken();
     const api = this.options.apiUrl();
-    const form = new FormData();
-    form.append('id', id);
-    form.append('x', String(point?.x ?? 0.5));
-    form.append('y', String(point?.y ?? 0.5));
-    const created = await postForm(joinUrl(api, '/v1/conversions'), form, token, fetchImpl);
+    const uv = { x: point?.x ?? 0.5, y: point?.y ?? 0.5 };
+    const payload: {
+      id: string;
+      x: number;
+      y: number;
+      image?: string;
+      marked?: string;
+    } = { id, x: uv.x, y: uv.y };
+    if (point?.image) {
+      payload.image = point.image;
+      try {
+        const blob = dataUrlToBlob(point.image);
+        const marked = await markPhotoBlob(blob, uv);
+        payload.marked = await blobToBase64(marked);
+      } catch (error) {
+        console.warn('[scene-echoes] could not mark captured still', error);
+        payload.marked = point.image;
+      }
+    } else {
+      const photoUrl = this.options.photoUrl?.(id);
+      if (photoUrl) {
+        try {
+          const imageRes = await fetchImpl(photoUrl);
+          if (imageRes.ok) {
+            const blob = await imageRes.blob();
+            payload.image = await blobToBase64(blob);
+            const marked = await markPhotoBlob(blob, uv);
+            payload.marked = await blobToBase64(marked);
+          }
+        } catch (error) {
+          console.warn('[scene-echoes] could not attach photo for naming', error);
+        }
+      }
+    }
+    const created = await postJson(joinUrl(api, '/v1/conversions'), payload, token, fetchImpl);
     if (created.status !== 202) {
       throw new LiveConversionError(`Unexpected status ${created.status}`);
     }
@@ -92,12 +125,12 @@ export class LiveConversionModelSource implements ModelSource {
     const bytes = await getArrayBuffer(joinUrl(api, status.modelUrl), token, fetchImpl);
     if (!isGlb(bytes)) throw new LiveConversionError('invalid file');
     if (this.options.parseModel) {
-      return this.options.parseModel(bytes, status);
+      return this.options.parseModel(bytes, status, id);
     }
     const object: ManifestObject = {
       id,
       scene: 'furniture',
-      label: id,
+      label: status.label ?? id,
       realSize: status.realSize ?? 1,
       up: status.up ?? 'y',
     };

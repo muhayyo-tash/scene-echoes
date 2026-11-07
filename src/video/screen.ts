@@ -1,5 +1,4 @@
 import {
-  CanvasTexture,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
@@ -9,15 +8,12 @@ import {
   Color,
 } from 'three';
 import { config } from '../config.js';
-import { canvasTextureSource, drawCloudFilm } from '../assets/drawn.js';
 import { assetUrl } from '../assets/loaders.js';
 
 export class VideoScreen {
   readonly group = new Group();
   readonly mesh: Mesh;
   video: HTMLVideoElement | null = null;
-  private fallback: HTMLCanvasElement | null = null;
-  private fallbackCtx: CanvasRenderingContext2D | null = null;
   private usingFallback = false;
   private clock = 0;
   paused = false;
@@ -43,7 +39,7 @@ export class VideoScreen {
     this.group.visible = false;
   }
 
-  async preload(filmId = 'park'): Promise<void> {
+  async preload(filmId: string): Promise<void> {
     if (this.video && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
     const video = document.createElement('video');
     video.playsInline = true;
@@ -92,9 +88,6 @@ export class VideoScreen {
     (this.mesh.material as MeshBasicMaterial).opacity = 1;
     if (!this.video) {
       this.usingFallback = true;
-      this.fallback = canvasTextureSource((ctx, w, h) => drawCloudFilm(ctx, w, h, 0), 640, 360);
-      this.fallbackCtx = this.fallback.getContext('2d');
-      this.mesh.material = new MeshBasicMaterial({ map: new CanvasTexture(this.fallback) });
       this.clock = at;
       return;
     }
@@ -129,15 +122,12 @@ export class VideoScreen {
 
   update(dt: number): void {
     if (this.paused) return;
-    if (this.usingFallback && this.fallback && this.fallbackCtx) {
+    if (this.usingFallback) {
       this.clock += dt;
       if (this.clock >= 30) {
         this.ended = true;
         this.paused = true;
       }
-      drawCloudFilm(this.fallbackCtx, this.fallback.width, this.fallback.height, this.clock);
-      const map = (this.mesh.material as MeshBasicMaterial).map;
-      if (map) map.needsUpdate = true;
     }
   }
 

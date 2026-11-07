@@ -12,16 +12,6 @@ const MODELS = [
     url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb',
     license: 'Khronos glTF Sample Assets — Duck',
   },
-  {
-    dest: 'fox.glb',
-    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb',
-    license: 'Khronos glTF Sample Assets — Fox',
-  },
-  {
-    dest: 'flamingo.glb',
-    url: 'https://raw.githubusercontent.com/mrdoob/three.js/r181/examples/models/gltf/Flamingo.glb',
-    license: 'three.js examples — Flamingo (MIT)',
-  },
 ];
 
 async function download(url, dest) {

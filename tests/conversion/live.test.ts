@@ -59,6 +59,52 @@ describe('live conversion client', () => {
     expect(isGlb(handle.root as ArrayBuffer)).toBe(true);
   });
 
+  it('posts a captured still and does not fall back when asked', async () => {
+    let posted: { id?: string; image?: string } = {};
+    const fetchImpl = mockFetch(async (url, init) => {
+      if (url.endsWith('/v1/conversions')) {
+        posted = JSON.parse(String(init?.body ?? '{}')) as { id?: string; image?: string };
+        return new Response(JSON.stringify({ jobId: 'scene-1' }), { status: 202 });
+      }
+      if (url.includes('/v1/conversions/scene-1')) {
+        return new Response(
+          JSON.stringify({ status: 'done', progress: 1, modelUrl: '/models/scene.glb', label: 'flower', realSize: 0.3 }),
+        );
+      }
+      if (url.endsWith('/models/scene.glb')) return new Response(glbBytes());
+      return new Response('missing', { status: 404 });
+    });
+    const fallback = new ManifestModelSource(sofa, async (o) => o);
+    const live = new LiveConversionModelSource(fallback, {
+      apiUrl: () => 'http://localhost:8787',
+      token: new StaticTokenProvider(null),
+      fetchImpl,
+      pollSeconds: () => 0,
+      timeoutSeconds: () => 30,
+      sleep: async () => undefined,
+    });
+    const image = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP/AABEIAQEBAf/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAPwA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AfwD/2Q==';
+    const handle = await live.request('scene-1', { x: 0.5, y: 0.5, image, allowFallback: false });
+    expect(posted.id).toBe('scene-1');
+    expect(posted.image).toBe(image);
+    expect(handle.source).toBe('live');
+  });
+
+  it('throws instead of using a bundled model when fallback is disabled', async () => {
+    const fetchImpl = mockFetch(async () => new Response('no', { status: 500 }));
+    const fallback = new ManifestModelSource(sofa, async (o) => ({ ok: o.id }));
+    const live = new LiveConversionModelSource(fallback, {
+      apiUrl: () => 'http://localhost:8787',
+      token: new StaticTokenProvider(null),
+      fetchImpl,
+      pollSeconds: () => 0,
+      sleep: async () => undefined,
+    });
+    await expect(
+      live.request('scene-9', { x: 0.5, y: 0.5, image: 'data:image/jpeg;base64,QQ==', allowFallback: false }),
+    ).rejects.toBeTruthy();
+  });
+
   it('falls back to the bundled model on failure', async () => {
     const fetchImpl = mockFetch(async () => new Response('no', { status: 500 }));
     const fallback = new ManifestModelSource(sofa, async (o) => ({ ok: o.id }));
@@ -113,6 +159,61 @@ describe('live conversion client', () => {
     });
     const handle = await live.request('sofa');
     expect(handle.source).toBe('manifest');
+  });
+
+  it('downloads a live film timeline and models', async () => {
+    const applied: Array<{ objectId: string; glb: number }> = [];
+    const fetchImpl = mockFetch(async (url) => {
+      if (url.endsWith('/v1/films')) return new Response(JSON.stringify({ jobId: 'film' }), { status: 202 });
+      if (url.includes('/v1/films/film')) {
+        return new Response(
+          JSON.stringify({
+            status: 'done',
+            progress: 1,
+            timelineUrl: '/films/film/timeline.json',
+            manifestUrl: '/films/film/manifest.json',
+          }),
+        );
+      }
+      if (url.endsWith('/timeline.json')) {
+        return new Response(
+          JSON.stringify({
+            moments: [{ id: 'm1', time: 6, objectId: 'live-fox', rect: { x: 0, y: 0, width: 1, height: 1 } }],
+          }),
+        );
+      }
+      if (url.endsWith('/manifest.json')) {
+        return new Response(
+          JSON.stringify({
+            objects: [
+              {
+                id: 'live-fox',
+                scene: 'movie',
+                label: 'fox',
+                realSize: 0.45,
+                modelUrl: '/models/live-fox.glb',
+              },
+            ],
+          }),
+        );
+      }
+      if (url.endsWith('/models/live-fox.glb')) return new Response(glbBytes());
+      return new Response('missing', { status: 404 });
+    });
+    const fallback = new FilmPreloadProcessing(null, async (_id, report) => report(1));
+    const live = new LiveFilmProcessing(fallback, {
+      apiUrl: () => 'http://localhost:8787',
+      token: new StaticTokenProvider(null),
+      fetchImpl,
+      pollSeconds: () => 0,
+      sleep: async () => undefined,
+      applyLiveFilm: async (result) => {
+        applied.push({ objectId: result.objects[0]?.id ?? '', glb: result.glbs['live-fox']?.byteLength ?? 0 });
+      },
+    });
+    await live.start('park');
+    expect(live.get('park').status).toBe('ready');
+    expect(applied).toEqual([{ objectId: 'live-fox', glb: 12 }]);
   });
 
   it('processes a film then falls back on live film failure', async () => {
