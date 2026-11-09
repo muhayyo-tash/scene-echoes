@@ -11,6 +11,7 @@ import {
   Scene,
   Vector2,
   Vector3,
+  type Object3D,
   type Camera,
   type WebGLRenderer,
 } from 'three';
@@ -137,6 +138,9 @@ export class SceneEchoesApp {
   private carrying: Group | null = null;
   private desktopControls: OrbitControls | null = null;
   private desktopRay = new Raycaster();
+  private uiRaycaster = new Raycaster();
+  private uiOrigin = new Vector3();
+  private uiDir = new Vector3();
   private desktopPointer = new Vector2();
   private seatPressed: PlacedFurniture | null = null;
   private desktopHold: {
@@ -391,6 +395,45 @@ export class SceneEchoesApp {
     void input;
   }
 
+  private uiPick(hand: {
+    rayOrigin: { x: number; y: number; z: number } | null;
+    rayDirection: { x: number; y: number; z: number } | null;
+  }): { object: Object3D; point: Vector3 } | null {
+    if (!hand.rayOrigin || !hand.rayDirection) return null;
+    this.uiOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
+    this.uiDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
+    this.uiRaycaster.set(this.uiOrigin, this.uiDir);
+    this.uiRaycaster.far = 4;
+    const hits = this.uiRaycaster.intersectObjects(
+      [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
+      true,
+    );
+    const hit = hits.find((entry) => entry.object.visible);
+    return hit ? { object: hit.object, point: hit.point } : null;
+  }
+
+  private uiKind(object: Object3D | null): {
+    kind: 'icon' | 'close' | 'folder' | 'card';
+    folder?: FinderSection;
+    cardId?: string;
+  } | null {
+    let current: Object3D | null = object;
+    while (current) {
+      const data = current.userData as {
+        appIcon?: boolean;
+        close?: boolean;
+        folder?: FinderSection;
+        cardId?: string;
+      };
+      if (data.appIcon) return { kind: 'icon' };
+      if (data.close) return { kind: 'close' };
+      if (data.folder) return { kind: 'folder', folder: data.folder };
+      if (data.cardId) return { kind: 'card', cardId: data.cardId };
+      current = current.parent;
+    }
+    return null;
+  }
+
   private updateExplorer(dt: number, input: FrameInput): void {
     if (!this.desktop) {
       this.explorer.placeDock(
@@ -403,15 +446,48 @@ export class SceneEchoesApp {
       );
     }
     let hover: string | null = null;
-    const tips = [this.hands.left.indexTip, this.hands.right.indexTip, this.hands.left.pinchPosition, this.hands.right.pinchPosition];
+    const tips = [
+      this.hands.left.indexTip,
+      this.hands.right.indexTip,
+      this.hands.left.pinchPosition,
+      this.hands.right.pinchPosition,
+    ];
     const pressing =
       this.hands.left.justPinched ||
       this.hands.right.justPinched ||
       pokeSurface(this.hands.left, 0.01, dt) ||
       pokeSurface(this.hands.right, 0.01, dt);
+
+    // Invisible hand target-ray for Finder only (no white line). Point at a
+    // card/icon and pinch to open — fingertip poke still works as a fallback.
+    for (const hand of [this.hands.left, this.hands.right]) {
+      const target = this.uiKind(this.uiPick(hand)?.object ?? null);
+      if (target?.kind === 'card' && target.cardId) hover = target.cardId;
+      if (!hand.justPinched || !target) continue;
+      if (target.kind === 'icon' && !this.space.explorerOpen && !this.space.photoOpen) {
+        this.openLibrary(input);
+        return;
+      }
+      if (target.kind === 'close' && this.space.explorerOpen && !this.space.photoOpen) {
+        this.closeLibrary();
+        return;
+      }
+      if (target.kind === 'folder' && target.folder && this.space.explorerOpen && !this.space.photoOpen) {
+        this.explorer.setFolder(target.folder);
+        return;
+      }
+      if (target.kind === 'card' && target.cardId && this.space.explorerOpen && !this.space.photoOpen) {
+        const card = this.explorer.cards.find((item) => item.id === target.cardId);
+        if (card) {
+          void this.selectCard(card.id, card.type, input);
+          return;
+        }
+      }
+    }
+
     if (!this.space.explorerOpen && !this.space.photoOpen) {
       for (const tip of tips) {
-        if (tip && this.explorer.hitIcon(tip, 0.1) && pressing) {
+        if (tip && this.explorer.hitIcon(tip, 0.14) && pressing) {
           this.openLibrary(input);
           return;
         }
@@ -423,20 +499,21 @@ export class SceneEchoesApp {
     }
     for (const tip of tips) {
       if (!tip) continue;
-      if (this.explorer.hitClose(tip, 0.06) && pressing) {
+      if (this.explorer.hitClose(tip, 0.08) && pressing) {
         this.closeLibrary();
         return;
       }
-      const folder = this.explorer.hitFolder(tip, 0.07);
+      const folder = this.explorer.hitFolder(tip, 0.09);
       if (folder && pressing) {
         this.explorer.setFolder(folder);
         return;
       }
-      const hit = this.explorer.hitTest(tip, 0.08);
+      const hit = this.explorer.hitTest(tip, 0.14);
       if (hit) {
         hover = hit.id;
         if (pressing) {
           void this.selectCard(hit.id, hit.type, input);
+          return;
         }
       }
     }

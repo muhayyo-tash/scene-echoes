@@ -242,7 +242,7 @@ export class FileExplorer {
     this.applyFolder();
   }
 
-  hitTest(point: { x: number; y: number; z: number }, radius = 0.06): ExplorerCard | null {
+  hitTest(point: { x: number; y: number; z: number }, radius = 0.12): ExplorerCard | null {
     if (!this.visible || !this.group.visible) return null;
     let best: ExplorerCard | null = null;
     let bestD = radius;
@@ -250,8 +250,12 @@ export class FileExplorer {
     for (const card of this.cards) {
       if (!card.mesh.visible) continue;
       card.mesh.getWorldPosition(this.world);
+      const reach = Math.max(
+        radius,
+        Math.hypot(card.layout.width, card.layout.height) * 0.55,
+      );
       const d = this.world.distanceTo(point as never);
-      if (d < bestD) {
+      if (d < reach && d < bestD) {
         best = card;
         bestD = d;
       }
