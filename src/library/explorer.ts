@@ -207,7 +207,7 @@ export class FileExplorer {
     const framePad = 0.012;
     const mesh = new Mesh(
       new PlaneGeometry(width, height),
-      new MeshPhysicalMaterial({ map: texture, roughness: 0.4 }),
+      new MeshPhysicalMaterial({ map: texture, roughness: 0.4, side: DoubleSide }),
     );
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
@@ -220,26 +220,36 @@ export class FileExplorer {
       chest.z + forward.z * 0.45,
     );
     mesh.lookAt(chest.x, centerY, chest.z);
+    // lookAt aims local -Z at the chest; flip so the photo face points at the user.
+    mesh.rotateY(Math.PI);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
-    // After lookAt, local +Z faces into the room (away from the user). Keep the
-    // matte and shadow behind the print so they never cover the image or steal hits.
+    // Local +Z now faces the user. Keep the white matte / shadow just behind the print.
     const frame = new Mesh(
       new PlaneGeometry(width + framePad * 2, height + framePad * 2),
-      new MeshBasicMaterial({ color: 0xffffff }),
+      new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide }),
     );
     frame.position.copy(mesh.position);
     frame.quaternion.copy(mesh.quaternion);
-    frame.translateZ(0.0015);
+    frame.translateZ(-0.0015);
+    frame.renderOrder = 0;
     frame.userData.photoFrame = true;
     const shadow = new Mesh(
       new PlaneGeometry(width + framePad * 2.4, height + framePad * 2.4),
-      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }),
+      new MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
     );
     shadow.position.copy(mesh.position);
     shadow.position.y -= 0.012;
     shadow.quaternion.copy(mesh.quaternion);
-    shadow.translateZ(0.003);
+    shadow.translateZ(-0.003);
+    shadow.renderOrder = -1;
     shadow.userData.photoFrame = true;
+    mesh.renderOrder = 1;
     this.photoGroup.add(shadow, frame, mesh);
     this.photoGroup.visible = true;
     this.group.visible = false;
