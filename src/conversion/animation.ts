@@ -102,12 +102,9 @@ export class ConversionAnimation {
 
   update(progress: number): void {
     const { phase, local } = conversionPhase(progress);
-    this.outline.visible = !this.column && (phase === 'select' || phase === 'lift');
-    (this.outline.material as MeshBasicMaterial).opacity = phase === 'select' ? local : 0.4;
-    this.outline.scale.setScalar(0.8 + local * 0.4);
-    this.cutout.visible = !this.column && (phase === 'lift' || phase === 'build');
-    this.cutout.position.y = phase === 'lift' ? local * 0.12 : 0.12;
-    (this.cutout.material as MeshBasicMaterial).opacity = phase === 'lift' ? 0.7 : 0.35 * (1 - local);
+    // No press-target ring or cutout — the open photo stays clean.
+    this.outline.visible = false;
+    this.cutout.visible = false;
     if (this.wire) {
       this.wire.visible = phase === 'build' || phase === 'settle';
       this.wire.scale.set(1, phase === 'build' ? Math.max(0.05, local) : 1, 1);

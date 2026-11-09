@@ -3,8 +3,8 @@ export type ConversionMode = 'manifest' | 'live';
 export const CONVERSION_API_PLACEHOLDER = 'https://example.invalid';
 
 const numericDefaults = {
-  pinchOnDistance: 0.02,
-  pinchOffDistance: 0.035,
+  pinchOnDistance: 0.035,
+  pinchOffDistance: 0.055,
   longPressSeconds: 0.8,
   longPressMoveTolerance: 0.02,
   pokeDepth: 0.015,

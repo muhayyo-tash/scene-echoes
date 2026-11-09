@@ -63,7 +63,7 @@ import {
 import { spawnInFront } from '../core/placement.js';
 import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
-import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
+import { createGhostHand, playGhostSlide } from '../core/ghost-hand.js';
 import { SceneCapture } from '../core/scene-capture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
@@ -129,6 +129,7 @@ export class SceneEchoesApp {
     | { kind: 'furniture' | 'movie' | 'screen'; id: string; hand: 'left' | 'right' }
     | null = null;
   twoHandScale: number | null = null;
+  private grabOffset = new Vector3();
   hintPlayed = { slide: false, pinch: false };
   time = 0;
   fps = 0;
@@ -557,12 +558,9 @@ export class SceneEchoesApp {
       y: input.head.position.y - config.chestOffset,
       z: input.head.position.z,
     }, forward);
-    if (!this.hintPlayed.pinch) {
-      this.hintPlayed.pinch = true;
-      const photo = this.explorer.openPhoto;
-      if (photo) playGhostPinchHold(this.ghost, 0, photo.position);
-      this.ghost.userData.anim = { kind: 'pinch', t: 0 };
-    }
+    this.hintPlayed.pinch = true;
+    this.ghost.visible = false;
+    this.ghost.userData.anim = undefined;
   }
 
   private updateConversion(dt: number, input: FrameInput): void {
@@ -724,98 +722,112 @@ export class SceneEchoesApp {
   }
 
   private updateGrab(dt: number, input: FrameInput): void {
-    const pinchHand = this.hands.left.pinched
-      ? this.hands.left
-      : this.hands.right.pinched
-        ? this.hands.right
-        : null;
-    if (!pinchHand?.pinchPosition) {
-      if (this.grab?.kind === 'furniture') {
-        const item = this.furniture.find((f) => f.id === this.grab?.id);
-        const releaseHand = this.grab.hand === 'left' ? this.hands.left : this.hands.right;
-        if (item && handSpeed(releaseHand) > config.flickSpeed) {
-          this.placed.remove(item.root);
-          this.furniture = this.furniture.filter((f) => f !== item);
-          this.audio.play('whoosh', item.root.position);
-        } else if (item) {
-          const above = nearestHorizontal(this.surfaces.surfaces, item.root.position);
-          const floorY = above ? above.origin.y : item.root.position.y;
-          if (item.root.position.y > floorY + 0.05) dropFurniture(item);
-          this.audio.play('thud', item.root.position);
-        }
-      }
-      if (this.grab?.kind === 'movie') {
-        const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
-        if (movieObj) movieObj.grabbed = false;
-      }
-      this.grab = null;
-      this.carrying = null;
-      this.landingRing.visible = false;
-      this.twoHandScale = null;
+    this.landingRing.visible = false;
+    const activeHand = this.grab
+      ? this.grab.hand === 'left'
+        ? this.hands.left
+        : this.hands.right
+      : this.hands.left.pinched
+        ? this.hands.left
+        : this.hands.right.pinched
+          ? this.hands.right
+          : null;
+
+    // Sticky hold: keep the same hand until that pinch clearly opens.
+    if (this.grab && (!activeHand?.pinched || !activeHand.pinchPosition)) {
+      this.releaseGrab();
       return;
     }
+
     if (!this.grab) {
-      const p = pinchHand.pinchPosition;
+      if (!activeHand?.pinched || !activeHand.pinchPosition) return;
+      const p = activeHand.pinchPosition;
       const furniture = this.furniture.find((f) => this.canGrabFurniture(f, p));
       if (furniture) {
         furniture.falling = false;
-        this.grab = { kind: 'furniture', id: furniture.id, hand: pinchHand.handedness };
+        this.grabOffset.set(
+          furniture.root.position.x - p.x,
+          furniture.root.position.y - p.y,
+          furniture.root.position.z - p.z,
+        );
+        this.grab = { kind: 'furniture', id: furniture.id, hand: activeHand.handedness };
         this.carrying = furniture.root;
-      }
-      const movieObj = this.movie.objects.find((o) => o.root.position.distanceTo(p as never) < 0.35);
-      if (!this.grab && movieObj) {
-        movieObj.grabbed = true;
-        this.grab = { kind: 'movie', id: movieObj.id, hand: pinchHand.handedness };
-      }
-      if (
-        !this.grab &&
-        this.screen.group.visible &&
-        this.screen.group.position.distanceTo(p as never) < 0.6
-      ) {
-        this.grab = { kind: 'screen', id: 'screen', hand: pinchHand.handedness };
+        this.audio.play('whoosh', furniture.root.position);
+      } else {
+        const movieObj = this.movie.objects.find((o) => o.root.position.distanceTo(p as never) < 0.4);
+        if (movieObj) {
+          movieObj.grabbed = true;
+          this.grabOffset.set(
+            movieObj.root.position.x - p.x,
+            movieObj.root.position.y - p.y,
+            movieObj.root.position.z - p.z,
+          );
+          this.grab = { kind: 'movie', id: movieObj.id, hand: activeHand.handedness };
+        } else if (
+          this.screen.group.visible &&
+          this.screen.group.position.distanceTo(p as never) < 0.6
+        ) {
+          this.grabOffset.set(0, 0, 0);
+          this.grab = { kind: 'screen', id: 'screen', hand: activeHand.handedness };
+        }
       }
     }
-    if (this.grab) {
-      const target = this.grabTarget();
-      if (target && this.grab.kind !== 'screen') {
-        target.position.set(
-          pinchHand.pinchPosition.x,
-          pinchHand.pinchPosition.y,
-          pinchHand.pinchPosition.z,
-        );
-        const above = nearestHorizontal(this.surfaces.surfaces, target.position);
-        this.landingRing.visible = Boolean(above);
-        if (above) {
-          this.landingRing.position.set(target.position.x, above.origin.y + 0.002, target.position.z);
-        }
+
+    if (!this.grab || !activeHand?.pinchPosition) return;
+    const pinch = activeHand.pinchPosition;
+    const target = this.grabTarget();
+    if (target && this.grab.kind !== 'screen') {
+      // Object sticks to the pinched fingers and moves with the hand.
+      target.position.set(
+        pinch.x + this.grabOffset.x,
+        pinch.y + this.grabOffset.y,
+        pinch.z + this.grabOffset.z,
+      );
+    }
+    if (this.grab.kind === 'screen') {
+      this.screen.group.position.set(pinch.x, pinch.y, pinch.z);
+    }
+    if (this.grab.kind === 'furniture' && this.hands.left.pinched && this.hands.right.pinched) {
+      const d =
+        this.hands.left.pinchPosition && this.hands.right.pinchPosition
+          ? Math.hypot(
+              this.hands.left.pinchPosition.x - this.hands.right.pinchPosition.x,
+              this.hands.left.pinchPosition.y - this.hands.right.pinchPosition.y,
+              this.hands.left.pinchPosition.z - this.hands.right.pinchPosition.z,
+            )
+          : 0;
+      if (this.twoHandScale === null) this.twoHandScale = d;
+      else {
+        const item = this.furniture.find((f) => f.id === this.grab?.id);
+        if (item && this.twoHandScale > 0) resizeFurniture(item, item.scale * (d / this.twoHandScale));
+        this.twoHandScale = d;
       }
-      if (this.grab.kind === 'screen') {
-        this.screen.group.position.lerp(
-          new Vector3(pinchHand.pinchPosition.x, pinchHand.pinchPosition.y, pinchHand.pinchPosition.z),
-          0.4,
-        );
-      }
-      if (this.grab.kind === 'furniture' && this.hands.left.pinched && this.hands.right.pinched) {
-        const d =
-          this.hands.left.pinchPosition && this.hands.right.pinchPosition
-            ? Math.hypot(
-                this.hands.left.pinchPosition.x - this.hands.right.pinchPosition.x,
-                this.hands.left.pinchPosition.y - this.hands.right.pinchPosition.y,
-                this.hands.left.pinchPosition.z - this.hands.right.pinchPosition.z,
-              )
-            : 0;
-        if (this.twoHandScale === null) this.twoHandScale = d;
-        else {
-          const item = this.furniture.find((f) => f.id === this.grab?.id);
-          if (item && this.twoHandScale > 0) resizeFurniture(item, item.scale * (d / this.twoHandScale));
-          this.twoHandScale = d;
-        }
-      } else {
-        this.twoHandScale = null;
-      }
+    } else {
+      this.twoHandScale = null;
     }
     void dt;
     void input;
+  }
+
+  private releaseGrab(): void {
+    if (this.grab?.kind === 'furniture') {
+      const item = this.furniture.find((f) => f.id === this.grab?.id);
+      if (item) {
+        const above = nearestHorizontal(this.surfaces.surfaces, item.root.position);
+        const floorY = above ? above.origin.y : item.root.position.y;
+        if (item.root.position.y > floorY + 0.05) dropFurniture(item);
+        this.audio.play('thud', item.root.position);
+      }
+    }
+    if (this.grab?.kind === 'movie') {
+      const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
+      if (movieObj) movieObj.grabbed = false;
+    }
+    this.grab = null;
+    this.carrying = null;
+    this.landingRing.visible = false;
+    this.twoHandScale = null;
+    this.grabOffset.set(0, 0, 0);
   }
 
   private canGrabFurniture(
@@ -823,7 +835,7 @@ export class SceneEchoesApp {
     point: { x: number; y: number; z: number },
   ): boolean {
     if (isOnFurniture(item, point)) return true;
-    const reach = Math.max(0.32, item.object.realSize * 0.55 + config.grabReachPad);
+    const reach = Math.max(0.45, item.object.realSize * 0.7 + config.grabReachPad);
     return item.root.position.distanceTo(point as never) < reach;
   }
 
