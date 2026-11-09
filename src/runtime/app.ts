@@ -826,50 +826,48 @@ export class SceneEchoesApp {
   }
 
   /**
-   * Two hands on opposite sides of an object: move apart to grow, together to shrink.
-   * Works with pinched fingers or open fingertips resting on the object.
+   * Two-hand resize: both hands must be pinched near the object.
+   * Spread apart to grow, bring together to shrink. Open either hand to stop.
+   * Ignores small jitters so casual touch does not reshape the model.
    */
   private updateTwoHandResize(): boolean {
-    const leftTip =
-      this.hands.left.pinchPosition ?? this.hands.left.indexTip ?? this.hands.left.palm;
-    const rightTip =
-      this.hands.right.pinchPosition ?? this.hands.right.indexTip ?? this.hands.right.palm;
-    if (!leftTip || !rightTip) {
+    const leftPinch = this.hands.left.pinched ? this.hands.left.pinchPosition : null;
+    const rightPinch = this.hands.right.pinched ? this.hands.right.pinchPosition : null;
+    if (!leftPinch || !rightPinch) {
       this.endTwoHandResize();
       return false;
     }
     const item = this.furniture.find(
-      (f) => this.canGrabFurniture(f, leftTip) && this.canGrabFurniture(f, rightTip),
+      (f) => this.canGrabFurniture(f, leftPinch) && this.canGrabFurniture(f, rightPinch),
     );
     if (!item) {
       this.endTwoHandResize();
       return false;
     }
-    const bothContact =
-      (this.hands.left.pinched || isOnFurniture(item, leftTip)) &&
-      (this.hands.right.pinched || isOnFurniture(item, rightTip));
-    if (!bothContact) {
+    const distance = Math.hypot(
+      leftPinch.x - rightPinch.x,
+      leftPinch.y - rightPinch.y,
+      leftPinch.z - rightPinch.z,
+    );
+    // Hands must be clearly apart before resize arms — avoids accidental squish.
+    if (distance < 0.18) {
+      if (this.twoHandScale === null) return false;
       this.endTwoHandResize();
       return false;
     }
-    const distance = Math.hypot(
-      leftTip.x - rightTip.x,
-      leftTip.y - rightTip.y,
-      leftTip.z - rightTip.z,
-    );
-    if (distance < 0.04) return this.twoHandScale !== null;
     if (this.twoHandScale === null || this.twoHandScaleBase === null) {
       this.twoHandScale = distance;
       this.twoHandScaleBase = item.scale;
       item.falling = false;
+      setFurnitureContacts(item, []);
       return true;
     }
-    resizeFurniture(item, this.twoHandScaleBase * (distance / this.twoHandScale));
-    item.root.position.set(
-      (leftTip.x + rightTip.x) * 0.5,
-      (leftTip.y + rightTip.y) * 0.5,
-      (leftTip.z + rightTip.z) * 0.5,
-    );
+    const ratio = distance / this.twoHandScale;
+    // Deadzone: ignore tiny hand wobble so the shape stays stable.
+    if (Math.abs(ratio - 1) < 0.08) return true;
+    const damped = 1 + (ratio - 1) * 0.55;
+    resizeFurniture(item, this.twoHandScaleBase * damped);
+    setFurnitureContacts(item, []);
     return true;
   }
 
@@ -920,6 +918,11 @@ export class SceneEchoesApp {
   private updateFurniture(dt: number, input: FrameInput): void {
     for (const item of this.furniture) {
       if (this.grab?.kind === 'furniture' && this.grab.id === item.id) continue;
+      if (this.twoHandScale !== null) {
+        setFurnitureContacts(item, []);
+        updateFurniture(item, dt, this.surfaces.surfaces, false, false, this.time, false);
+        continue;
+      }
       const contacts = [];
       let seatPress = this.seatPressed === item;
       const holdPoint = this.seatPressed === item ? this.desktopHold?.point : null;
@@ -927,11 +930,12 @@ export class SceneEchoesApp {
         contacts.push({ x: holdPoint.x, y: holdPoint.y, z: holdPoint.z, strength: 1, time: this.time });
       }
       for (const hand of [this.hands.left, this.hands.right]) {
+        // While either hand is pinched to grab/scale, do not squash the mesh.
+        if (hand.pinched) continue;
         const tip = hand.indexTip ?? hand.palm;
         if (!tip) continue;
         if (isOnFurniture(item, tip)) {
           contacts.push({ x: tip.x, y: tip.y, z: tip.z, strength: 1, time: this.time });
-          if (hand.pinched) seatPress = true;
         }
       }
       setFurnitureContacts(item, contacts);

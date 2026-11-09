@@ -47,6 +47,8 @@ export class FileExplorer {
   visible = false;
   /** True after the user pinches and moves Finder; keeps that placement. */
   userPlaced = false;
+  /** True after the dock icon is placed once in world space (does not follow the head). */
+  dockPlaced = false;
   folder: FinderSection = 'pictures';
   private panel!: Mesh;
   private closeHit!: Mesh;
@@ -103,15 +105,18 @@ export class FileExplorer {
   }
 
   placeDock(chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    this.iconGroup.visible = !this.photoGroup.visible;
+    // Stay put in the room — do not reattach to the headset every frame.
+    if (this.dockPlaced) return;
     const rightX = -forward.z;
     const rightZ = forward.x;
-    this.iconGroup.visible = !this.photoGroup.visible;
     this.iconGroup.position.set(
       chest.x + forward.x * 0.5 + rightX * -0.34,
       chest.y + 0.08,
       chest.z + forward.z * 0.5 + rightZ * -0.34,
     );
     this.iconGroup.lookAt(chest.x, chest.y + 0.08, chest.z);
+    this.dockPlaced = true;
   }
 
   setOpen(open: boolean, chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
@@ -199,26 +204,37 @@ export class FileExplorer {
     const aspect = image?.width && image.height ? image.height / image.width : 4 / 3;
     const width = config.openPhotoWidth;
     const height = width * aspect;
+    const framePad = 0.012;
     const mesh = new Mesh(
       new PlaneGeometry(width, height),
       new MeshPhysicalMaterial({ map: texture, roughness: 0.4 }),
     );
     mesh.userData.photoSize = { width, height };
+    // Raise toward eye height so the print sits centered, not low at the chest.
+    const centerY = chest.y + 0.16;
     mesh.position.set(
       chest.x + forward.x * 0.45,
-      chest.y,
+      centerY,
       chest.z + forward.z * 0.45,
     );
-    mesh.lookAt(chest.x, chest.y + 0.05, chest.z);
+    mesh.lookAt(chest.x, centerY, chest.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
+    const frame = new Mesh(
+      new PlaneGeometry(width + framePad * 2, height + framePad * 2),
+      new MeshBasicMaterial({ color: 0xffffff }),
+    );
+    frame.position.copy(mesh.position);
+    frame.quaternion.copy(mesh.quaternion);
+    frame.translateZ(-0.0015);
     const shadow = new Mesh(
-      new PlaneGeometry(width * 1.05, height * 1.05),
-      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }),
+      new PlaneGeometry(width + framePad * 2.4, height + framePad * 2.4),
+      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }),
     );
     shadow.position.copy(mesh.position);
-    shadow.position.y -= 0.01;
+    shadow.position.y -= 0.012;
     shadow.quaternion.copy(mesh.quaternion);
-    this.photoGroup.add(shadow, mesh);
+    shadow.translateZ(-0.003);
+    this.photoGroup.add(shadow, frame, mesh);
     this.photoGroup.visible = true;
     this.group.visible = false;
     this.iconGroup.visible = false;
