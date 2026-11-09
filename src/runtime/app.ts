@@ -470,6 +470,15 @@ export class SceneEchoesApp {
     // Skip UI clicks while dragging Finder itself.
     for (const hand of [this.hands.left, this.hands.right]) {
       if (this.grab?.kind === 'explorer') break;
+      const pinch = hand.pinchPosition;
+      if (
+        this.space.explorerOpen &&
+        !this.space.photoOpen &&
+        pinch &&
+        this.explorer.hitMoveHandle(pinch, 0.16)
+      ) {
+        continue;
+      }
       const target = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (target?.kind === 'card' && target.cardId) hover = target.cardId;
       if (!hand.justPinched || !target) continue;

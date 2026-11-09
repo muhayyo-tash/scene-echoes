@@ -4,7 +4,6 @@ import {
   DoubleSide,
   Group,
   Mesh,
-  MeshPhysicalMaterial,
   MeshBasicMaterial,
   PlaneGeometry,
   Texture,
@@ -147,12 +146,13 @@ export class FileExplorer {
 
   hitMoveHandle(point: { x: number; y: number; z: number }, radius = 0.12): boolean {
     if (!this.visible || !this.group.visible) return false;
+    // Title bar wins first so card/folder hit boxes cannot block drag.
+    this.moveHit.updateWorldMatrix(true, true);
+    this.moveHit.getWorldPosition(this.world);
+    if (this.world.distanceTo(point as never) < Math.max(radius, 0.16)) return true;
     if (this.hitClose(point, 0.07) || this.hitFolder(point, 0.08) || this.hitTest(point, 0.1)) {
       return false;
     }
-    this.moveHit.updateWorldMatrix(true, true);
-    this.moveHit.getWorldPosition(this.world);
-    if (this.world.distanceTo(point as never) < radius) return true;
     this.panel.updateWorldMatrix(true, true);
     this.panel.getWorldPosition(this.world);
     return this.world.distanceTo(point as never) < Math.max(radius, FINDER_WIDTH * 0.42);
@@ -200,57 +200,35 @@ export class FileExplorer {
     this.photoGroup.clear();
     const object = this.objects.find((item) => item.id === id);
     const texture = await this.photoTexture(object);
-    const image = texture.image as { width?: number; height?: number } | undefined;
+    // Bake a thin white matte into the texture so we never stack a covering plane.
+    const framed = framePhotoTexture(texture, 0.028);
+    const image = framed.image as { width?: number; height?: number } | undefined;
     const aspect = image?.width && image.height ? image.height / image.width : 4 / 3;
     const width = config.openPhotoWidth;
     const height = width * aspect;
-    const framePad = 0.012;
     const mesh = new Mesh(
       new PlaneGeometry(width, height),
-      new MeshPhysicalMaterial({ map: texture, roughness: 0.4, side: DoubleSide }),
+      new MeshBasicMaterial({ map: framed, toneMapped: false }),
     );
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Raise toward eye height so the print sits centered, not low at the chest.
     const centerY = chest.y + 0.16;
     mesh.position.set(
       chest.x + forward.x * 0.45,
       centerY,
       chest.z + forward.z * 0.45,
     );
-    mesh.lookAt(chest.x, centerY, chest.z);
-    // lookAt aims local -Z at the chest; flip so the photo face points at the user.
-    mesh.rotateY(Math.PI);
+    mesh.lookAt(chest.x, centerY + 0.05, chest.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
-    // Local +Z now faces the user. Keep the white matte / shadow just behind the print.
-    const frame = new Mesh(
-      new PlaneGeometry(width + framePad * 2, height + framePad * 2),
-      new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide }),
-    );
-    frame.position.copy(mesh.position);
-    frame.quaternion.copy(mesh.quaternion);
-    frame.translateZ(-0.0015);
-    frame.renderOrder = 0;
-    frame.userData.photoFrame = true;
     const shadow = new Mesh(
-      new PlaneGeometry(width + framePad * 2.4, height + framePad * 2.4),
-      new MeshBasicMaterial({
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.16,
-        depthWrite: false,
-        side: DoubleSide,
-      }),
+      new PlaneGeometry(width * 1.05, height * 1.05),
+      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }),
     );
     shadow.position.copy(mesh.position);
-    shadow.position.y -= 0.012;
+    shadow.position.y -= 0.01;
     shadow.quaternion.copy(mesh.quaternion);
-    shadow.translateZ(-0.003);
-    shadow.renderOrder = -1;
-    shadow.userData.photoFrame = true;
-    mesh.renderOrder = 1;
-    this.photoGroup.add(shadow, frame, mesh);
+    this.photoGroup.add(shadow, mesh);
     this.photoGroup.visible = true;
     this.group.visible = false;
     this.iconGroup.visible = false;
@@ -440,4 +418,32 @@ export class FileExplorer {
     }
     return new CanvasTexture(canvasTextureSource(drawSofaPhoto));
   }
+}
+
+/** Draw the source photo inset on a white canvas so the matte cannot cover the image. */
+function framePhotoTexture(texture: Texture, borderRatio: number): CanvasTexture {
+  const source = texture.image as
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | { width: number; height: number }
+    | undefined;
+  const srcW = Math.max(1, Math.floor(source && 'width' in source ? Number(source.width) || 640 : 640));
+  const srcH = Math.max(1, Math.floor(source && 'height' in source ? Number(source.height) || 480 : 480));
+  const pad = Math.max(4, Math.round(Math.min(srcW, srcH) * borderRatio));
+  const canvas = document.createElement('canvas');
+  canvas.width = srcW + pad * 2;
+  canvas.height = srcH + pad * 2;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (source && 'width' in source) {
+      ctx.drawImage(source as CanvasImageSource, pad, pad, srcW, srcH);
+    }
+  }
+  const framed = new CanvasTexture(canvas);
+  framed.colorSpace = texture.colorSpace;
+  framed.needsUpdate = true;
+  return framed;
 }
