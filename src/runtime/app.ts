@@ -71,15 +71,15 @@ import { createModelSource, createFilmProcessing, type LiveFilmResult } from '..
 import { ConversionAnimation } from '../conversion/animation.js';
 import type { ConversionPoint, FilmProcessing, ModelSource } from '../conversion/types.js';
 import {
-  dropFurniture,
-  isOnFurniture,
-  makeFurniture,
+  dropObject,
+  isOnObject,
+  makePlacedObject,
   pressSeat,
-  resizeFurniture,
-  setFurnitureContacts,
-  updateFurniture,
-  type PlacedFurniture,
-} from '../scenes/furniture.js';
+  resizeObject,
+  setObjectContacts,
+  updatePlacedObject,
+  type PlacedObject,
+} from '../scenes/placed-object.js';
 import { MovieScene } from '../scenes/movie.js';
 import { VideoScreen } from '../video/screen.js';
 import { parseTimelineMoments } from '../video/timeline.js';
@@ -105,7 +105,7 @@ export class SceneEchoesApp {
   timeline: TimelineFile = { moments: [] };
   modelSource!: ModelSource;
   films!: FilmProcessing;
-  furniture: PlacedFurniture[] = [];
+  placedObjects: PlacedObject[] = [];
   movie = new MovieScene([]);
   screen = new VideoScreen();
   conversion = new ConversionAnimation();
@@ -126,7 +126,7 @@ export class SceneEchoesApp {
   private sceneCaptureBusy = false;
   pendingConverted: { object: ManifestObject; model: Group; origin: Vector3 } | null = null;
   grab:
-    | { kind: 'furniture' | 'movie' | 'screen' | 'explorer'; id: string; hand: 'left' | 'right' }
+    | { kind: 'object3d' | 'movie' | 'screen' | 'explorer'; id: string; hand: 'left' | 'right' }
     | null = null;
   twoHandScale: number | null = null;
   private twoHandScaleBase: number | null = null;
@@ -144,7 +144,12 @@ export class SceneEchoesApp {
   private uiOrigin = new Vector3();
   private uiDir = new Vector3();
   private desktopPointer = new Vector2();
-  private seatPressed: PlacedFurniture | null = null;
+  private seatPressed: PlacedObject | null = null;
+  private photoHold: {
+    hand: 'left' | 'right' | null;
+    elapsed: number;
+    origin: { x: number; y: number; z: number } | null;
+  } = { hand: null, elapsed: 0, origin: null };
   private desktopHold: {
     x: number;
     y: number;
@@ -154,7 +159,7 @@ export class SceneEchoesApp {
     uv: { x: number; y: number } | null;
     cardId?: string;
     cardType?: ExplorerEntry['type'];
-    seatItem?: PlacedFurniture;
+    seatItem?: PlacedObject;
     folder?: FinderSection;
     fired: boolean;
   } | null = null;
@@ -333,7 +338,7 @@ export class SceneEchoesApp {
     this.updateExplorer(dt, input);
     this.updateConversion(dt, input);
     this.updateGrab(dt, input);
-    this.updateFurniture(dt, input);
+    this.updatePlacedObjects(dt, input);
     this.updateBookHold(input);
     this.updateMovie(dt, input);
     this.updateDesktopHold();
@@ -378,7 +383,7 @@ export class SceneEchoesApp {
   }
 
   private updateHints(dt: number, input: FrameInput): void {
-    const idle = !this.hands.anyPinch && !this.space.explorerOpen && this.furniture.length === 0;
+    const idle = !this.hands.anyPinch && !this.space.explorerOpen && this.placedObjects.length === 0;
     this.idle = idle ? this.idle + dt : 0;
     if (!this.hintPlayed.slide && this.idle > config.hintIdleSeconds) {
       this.hintPlayed.slide = true;
@@ -591,25 +596,54 @@ export class SceneEchoesApp {
       return;
     }
     if (this.space.photoOpen && this.explorer.openPhoto) {
-      const object = this.objects.find((item) => item.scene === 'furniture');
       const photo = this.explorer.openPhoto;
+      const objectId = (photo.userData.objectId as string | undefined) ?? null;
+      const object =
+        (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
+        this.objects.find((item) => item.scene === 'object3d');
+      photo.updateWorldMatrix(true, true);
+      let holding = false;
       for (const hand of [this.hands.left, this.hands.right]) {
-        if (!hand.longPress.fired || !hand.pinchPosition || !object || !photo) continue;
-        const uv = worldToPhotoUv(hand.pinchPosition, photo);
-        if (uv) {
+        const tip = hand.pinchPosition ?? (hand.pinched ? hand.indexTip : null);
+        if (!hand.pinched || !tip || !object) continue;
+        const uv = worldToPhotoUv(tip, photo, 0.04);
+        if (!uv) continue;
+        holding = true;
+        if (this.photoHold.hand !== hand.handedness || !this.photoHold.origin) {
+          this.photoHold = {
+            hand: hand.handedness,
+            elapsed: 0,
+            origin: { x: tip.x, y: tip.y, z: tip.z },
+          };
+        }
+        const origin = this.photoHold.origin!;
+        const moved = Math.hypot(tip.x - origin.x, tip.y - origin.y, tip.z - origin.z);
+        // Photo holds allow more wobble than generic long-press (hand tracking noise).
+        if (moved > 0.06) {
+          this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
+          this.photoHold.elapsed = 0;
+          continue;
+        }
+        this.photoHold.elapsed += dt;
+        if (this.photoHold.elapsed >= config.longPressSeconds || hand.longPress.fired) {
+          this.photoHold = { hand: null, elapsed: 0, origin: null };
+          hand.longPress.fired = false;
           void this.beginConversion(
             object.id,
-            new Vector3(hand.pinchPosition.x, hand.pinchPosition.y, hand.pinchPosition.z),
+            new Vector3(tip.x, tip.y, tip.z),
             false,
             uv,
           );
+          return;
         }
       }
+      if (!holding) this.photoHold = { hand: null, elapsed: 0, origin: null };
       if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
         void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
       return;
     }
+    this.photoHold = { hand: null, elapsed: 0, origin: null };
     this.updateSceneHold(input);
   }
 
@@ -708,7 +742,7 @@ export class SceneEchoesApp {
       object.realSize > config.maxSpawnRealSize
         ? { ...object, realSize: config.maxSpawnRealSize }
         : object;
-    const item = makeFurniture(capped, model);
+    const item = makePlacedObject(capped, model);
     if (object.realSize > config.maxSpawnRealSize && object.realSize > 0) {
       const factor = config.maxSpawnRealSize / object.realSize;
       item.scale = factor;
@@ -716,9 +750,9 @@ export class SceneEchoesApp {
     }
     item.root.position.copy(origin);
     item.falling = false;
-    const limited = applyObjectLimit(this.furniture, item, config.maxObjects);
+    const limited = applyObjectLimit(this.placedObjects, item, config.maxObjects);
     if (limited.removed) this.placed.remove(limited.removed.root);
-    this.furniture = limited.objects;
+    this.placedObjects = limited.objects;
     this.placed.add(item.root);
     this.carrying = null;
     this.grab = null;
@@ -763,17 +797,17 @@ export class SceneEchoesApp {
         this.grab = { kind: 'explorer', id: 'finder', hand: activeHand.handedness };
         return;
       }
-      const furniture = this.furniture.find((f) => this.canGrabFurniture(f, p));
-      if (furniture) {
-        furniture.falling = false;
+      const grabbed = this.placedObjects.find((item) => this.canGrabObject(item, p));
+      if (grabbed) {
+        grabbed.falling = false;
         this.grabOffset.set(
-          furniture.root.position.x - p.x,
-          furniture.root.position.y - p.y,
-          furniture.root.position.z - p.z,
+          grabbed.root.position.x - p.x,
+          grabbed.root.position.y - p.y,
+          grabbed.root.position.z - p.z,
         );
-        this.grab = { kind: 'furniture', id: furniture.id, hand: activeHand.handedness };
-        this.carrying = furniture.root;
-        this.audio.play('whoosh', furniture.root.position);
+        this.grab = { kind: 'object3d', id: grabbed.id, hand: activeHand.handedness };
+        this.carrying = grabbed.root;
+        this.audio.play('whoosh', grabbed.root.position);
       } else {
         const movieObj = this.movie.objects.find((o) => o.root.position.distanceTo(p as never) < 0.4);
         if (movieObj) {
@@ -837,8 +871,8 @@ export class SceneEchoesApp {
       this.endTwoHandResize();
       return false;
     }
-    const item = this.furniture.find(
-      (f) => this.canGrabFurniture(f, leftPinch) && this.canGrabFurniture(f, rightPinch),
+    const item = this.placedObjects.find(
+      (f) => this.canGrabObject(f, leftPinch) && this.canGrabObject(f, rightPinch),
     );
     if (!item) {
       this.endTwoHandResize();
@@ -859,15 +893,15 @@ export class SceneEchoesApp {
       this.twoHandScale = distance;
       this.twoHandScaleBase = item.scale;
       item.falling = false;
-      setFurnitureContacts(item, []);
+      setObjectContacts(item, []);
       return true;
     }
     const ratio = distance / this.twoHandScale;
     // Deadzone: ignore tiny hand wobble so the shape stays stable.
     if (Math.abs(ratio - 1) < 0.08) return true;
     const damped = 1 + (ratio - 1) * 0.55;
-    resizeFurniture(item, this.twoHandScaleBase * damped);
-    setFurnitureContacts(item, []);
+    resizeObject(item, this.twoHandScaleBase * damped);
+    setObjectContacts(item, []);
     return true;
   }
 
@@ -878,12 +912,12 @@ export class SceneEchoesApp {
   }
 
   private releaseGrab(): void {
-    if (this.grab?.kind === 'furniture') {
-      const item = this.furniture.find((f) => f.id === this.grab?.id);
+    if (this.grab?.kind === 'object3d') {
+      const item = this.placedObjects.find((f) => f.id === this.grab?.id);
       if (item) {
         const above = nearestHorizontal(this.surfaces.surfaces, item.root.position);
         const floorY = above ? above.origin.y : item.root.position.y;
-        if (item.root.position.y > floorY + 0.05) dropFurniture(item);
+        if (item.root.position.y > floorY + 0.05) dropObject(item);
         this.audio.play('thud', item.root.position);
       }
     }
@@ -899,28 +933,28 @@ export class SceneEchoesApp {
     this.grabOffset.set(0, 0, 0);
   }
 
-  private canGrabFurniture(
-    item: PlacedFurniture,
+  private canGrabObject(
+    item: PlacedObject,
     point: { x: number; y: number; z: number },
   ): boolean {
-    if (isOnFurniture(item, point)) return true;
+    if (isOnObject(item, point)) return true;
     const reach = Math.max(0.45, item.object.realSize * 0.7 + config.grabReachPad);
     return item.root.position.distanceTo(point as never) < reach;
   }
 
   private grabTarget(): Group | null {
     if (!this.grab) return null;
-    if (this.grab.kind === 'furniture') return this.furniture.find((f) => f.id === this.grab?.id)?.root ?? null;
+    if (this.grab.kind === 'object3d') return this.placedObjects.find((f) => f.id === this.grab?.id)?.root ?? null;
     if (this.grab.kind === 'movie') return this.movie.objects.find((o) => o.id === this.grab?.id)?.root ?? null;
     return null;
   }
 
-  private updateFurniture(dt: number, input: FrameInput): void {
-    for (const item of this.furniture) {
-      if (this.grab?.kind === 'furniture' && this.grab.id === item.id) continue;
+  private updatePlacedObjects(dt: number, input: FrameInput): void {
+    for (const item of this.placedObjects) {
+      if (this.grab?.kind === 'object3d' && this.grab.id === item.id) continue;
       if (this.twoHandScale !== null) {
-        setFurnitureContacts(item, []);
-        updateFurniture(item, dt, this.surfaces.surfaces, false, false, this.time, false);
+        setObjectContacts(item, []);
+        updatePlacedObject(item, dt, this.surfaces.surfaces, false, false, this.time, false);
         continue;
       }
       const contacts = [];
@@ -934,18 +968,18 @@ export class SceneEchoesApp {
         if (hand.pinched) continue;
         const tip = hand.indexTip ?? hand.palm;
         if (!tip) continue;
-        if (isOnFurniture(item, tip)) {
+        if (isOnObject(item, tip)) {
           contacts.push({ x: tip.x, y: tip.y, z: tip.z, strength: 1, time: this.time });
         }
       }
-      setFurnitureContacts(item, contacts);
+      setObjectContacts(item, contacts);
       const palmPress = [this.hands.left, this.hands.right].some(
         (h) => h.open && h.palm && h.palm.y > item.root.position.y && item.root.position.distanceTo(h.palm as never) < 0.45,
       );
       const poke = pokeSurface(this.hands.left, contacts.length ? 0.01 : null, dt);
       const wasUp = item.squash.displacement > 0.92;
-      updateFurniture(item, dt, this.surfaces.surfaces, palmPress, poke, this.time, seatPress);
-      if (wasUp && seatPress && item.object.scene === 'furniture') {
+      updatePlacedObject(item, dt, this.surfaces.surfaces, palmPress, poke, this.time, seatPress);
+      if (wasUp && seatPress && item.object.scene === 'object3d') {
         pressSeat(item, contacts[0]);
         this.audio.play('boing', item.root.position);
       }
@@ -1018,7 +1052,7 @@ export class SceneEchoesApp {
   }
 
   private anyTouch(): boolean {
-    return this.furniture.length + this.movie.objects.length > 0 && this.hands.anyPinch;
+    return this.placedObjects.length + this.movie.objects.length > 0 && this.hands.anyPinch;
   }
 
   private nextMomentLabel(): string | null {
@@ -1107,7 +1141,7 @@ export class SceneEchoesApp {
     if (hold.kind === 'photo') {
       if (!hold.point || !hold.uv) return;
       hold.fired = true;
-      const object = this.objects.find((item) => item.scene === 'furniture');
+      const object = this.objects.find((item) => item.scene === 'object3d');
       if (object) void this.beginConversion(object.id, hold.point.clone(), false, hold.uv);
       if (this.desktopControls) this.desktopControls.enabled = true;
       return;
@@ -1139,7 +1173,7 @@ export class SceneEchoesApp {
     uv: { x: number; y: number } | null;
     cardId?: string;
     cardType?: ExplorerEntry['type'];
-    seatItem?: PlacedFurniture;
+    seatItem?: PlacedObject;
     folder?: FinderSection;
     onScreen: boolean;
   } {
@@ -1159,9 +1193,14 @@ export class SceneEchoesApp {
     ];
     const hits = this.desktopRay.intersectObjects(targets, true);
     const point = hits[0]?.point.clone() ?? null;
-    if (this.space.photoOpen && this.explorer.openPhoto && point) {
-      const uv = worldToPhotoUv(point, this.explorer.openPhoto);
-      if (uv) return { kind: 'photo', point, uv, onScreen: false };
+    if (this.space.photoOpen && this.explorer.openPhoto) {
+      this.explorer.openPhoto.updateWorldMatrix(true, true);
+      const photoHit = hits.find((hit) => hit.object.userData.photoPrint) ?? hits[0];
+      const photoPoint = photoHit?.point.clone() ?? point;
+      if (photoPoint) {
+        const uv = worldToPhotoUv(photoPoint, this.explorer.openPhoto, 0.04);
+        if (uv) return { kind: 'photo', point: photoPoint, uv, onScreen: false };
+      }
     }
     const iconHit = hits.find((hit) => hit.object.userData.appIcon);
     if (iconHit && !this.space.explorerOpen && !this.space.photoOpen) {
@@ -1189,8 +1228,8 @@ export class SceneEchoesApp {
       }
     }
     if (point && hits[0] && !this.space.photoOpen) {
-      const item = furnitureAt(hits[0].object, this.furniture);
-      if (item?.object.scene === 'furniture') {
+      const item = placedObjectAt(hits[0].object, this.placedObjects);
+      if (item?.object.scene === 'object3d') {
         return { kind: 'seat', point, uv: null, seatItem: item, onScreen: false };
       }
     }
@@ -1244,10 +1283,10 @@ export class SceneEchoesApp {
   }
 }
 
-function furnitureAt(
+function placedObjectAt(
   object: { parent?: unknown } | null,
-  items: PlacedFurniture[],
-): PlacedFurniture | null {
+  items: PlacedObject[],
+): PlacedObject | null {
   let current: { parent?: unknown } | null = object;
   while (current) {
     const match = items.find((item) => item.root === current || item.visual === current);
@@ -1267,15 +1306,19 @@ function forwardFrom(q: { x: number; y: number; z: number; w: number }): { x: nu
 function worldToPhotoUv(
   point: { x: number; y: number; z: number },
   photo: Mesh,
+  edgePad = 0,
 ): { x: number; y: number } | null {
   const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
   const size = photo.userData.photoSize as { width: number; height: number } | undefined;
   const w = size?.width ?? config.openPhotoWidth;
   const h = size?.height ?? config.openPhotoWidth * 0.75;
+  // Ignore presses that are clearly far in front of / behind the print.
+  if (Math.abs(local.z) > 0.12) return null;
   const u = local.x / w + 0.5;
   const v = 0.5 - local.y / h;
-  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
-  return { x: u, y: v };
+  const pad = edgePad;
+  if (u < -pad || u > 1 + pad || v < -pad || v > 1 + pad) return null;
+  return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
 }
 
 function distanceToScreen(tip: { x: number; y: number; z: number } | null, screen: VideoScreen): number | null {

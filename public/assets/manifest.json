@@ -2,7 +2,7 @@
   "objects": [
     {
       "id": "sofa",
-      "scene": "furniture",
+      "scene": "object3d",
       "photo": "assets/photos/sofa.jpg",
       "mask": "assets/masks/sofa.png",
       "model": "assets/models/sofa.glb",

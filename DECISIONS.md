@@ -14,7 +14,7 @@ Ambiguous spec items and the simplest choice used.
 
 6. **SDK grabbing vs custom carry.** IWSDK grabbing is enabled with `useHandPinchForGrab`. Converted objects still use custom surface-constrained pinch carry so they slide on planes, flick away, and two-hand resize. The video screen also uses that custom grab.
 
-7. **Physics.** Havok is enabled in the project. Furniture drop bounce uses handwritten gravity, restitution and squash-and-stretch on the model scale so the original GLB materials stay visible. Planes are treated as simple supports, not Havok colliders.
+7. **Physics.** Havok is enabled in the project. Placed-object drop bounce uses handwritten gravity, restitution and squash-and-stretch on the model scale so the original GLB materials stay visible. Planes are treated as simple supports, not Havok colliders.
 
 8. **Persistent anchors.** Objects get a stable world pose. Cross-session restore uses `localStorage` of poses when available and is skipped silently if not. Native persistent-anchor handles are not required.
 

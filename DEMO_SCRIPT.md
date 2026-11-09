@@ -12,7 +12,7 @@ Record in the headset. No child or other identifiable person, brand, logo or num
 
 **Shot:** Slide a hand left. File explorer. Open the sofa photo. Long-press the sofa in the image. The real sofa model appears. Place it on the floor. Press and drop.
 
-**VO:** "Slide left for a photo. Hold the sofa. It becomes furniture in your real space."
+**VO:** "Slide left for a photo. Hold the sofa. It becomes a 3D object in your real space."
 
 ## 0:55–1:15 Movie processing
 

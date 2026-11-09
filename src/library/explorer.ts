@@ -210,6 +210,8 @@ export class FileExplorer {
       new MeshPhysicalMaterial({ map: texture, roughness: 0.4 }),
     );
     mesh.userData.photoSize = { width, height };
+    mesh.userData.objectId = id;
+    mesh.userData.photoPrint = true;
     // Raise toward eye height so the print sits centered, not low at the chest.
     const centerY = chest.y + 0.16;
     mesh.position.set(
@@ -219,13 +221,16 @@ export class FileExplorer {
     );
     mesh.lookAt(chest.x, centerY, chest.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
+    // After lookAt, local +Z faces into the room (away from the user). Keep the
+    // matte and shadow behind the print so they never cover the image or steal hits.
     const frame = new Mesh(
       new PlaneGeometry(width + framePad * 2, height + framePad * 2),
       new MeshBasicMaterial({ color: 0xffffff }),
     );
     frame.position.copy(mesh.position);
     frame.quaternion.copy(mesh.quaternion);
-    frame.translateZ(-0.0015);
+    frame.translateZ(0.0015);
+    frame.userData.photoFrame = true;
     const shadow = new Mesh(
       new PlaneGeometry(width + framePad * 2.4, height + framePad * 2.4),
       new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }),
@@ -233,7 +238,8 @@ export class FileExplorer {
     shadow.position.copy(mesh.position);
     shadow.position.y -= 0.012;
     shadow.quaternion.copy(mesh.quaternion);
-    shadow.translateZ(-0.003);
+    shadow.translateZ(0.003);
+    shadow.userData.photoFrame = true;
     this.photoGroup.add(shadow, frame, mesh);
     this.photoGroup.visible = true;
     this.group.visible = false;

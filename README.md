@@ -2,7 +2,7 @@
 
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Slide an open hand left to open Finder. A photo is the furniture hold-to-convert flow. An MP4 in Finder is the movie flow: the film plays in the room while Gemini + SAM 3D pull objects out of sampled frames.
+The headset starts as a clean view of your room. Slide an open hand left to open Finder. A photo is the hold-to-convert flow for any 3D object. An MP4 in Finder is the movie flow: the film plays in the room while Gemini + SAM 3D pull objects out of sampled frames.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
 
@@ -31,7 +31,7 @@ Drop an MP4 in `public/assets/movie/`. Finder Movies lists each file. Click it t
 
 ## How it was built
 
-TypeScript WebXR on the Immersive Web SDK. Hand input, Finder, conversion reveal, book pose, movie timeline and furniture squash are custom. Scene understanding, optional depth occlusion and SDK grabbing are enabled in `iwsdk.config.json`.
+TypeScript WebXR on the Immersive Web SDK. Hand input, Finder, conversion reveal, book pose, movie timeline and object squash are custom. Scene understanding, optional depth occlusion and SDK grabbing are enabled in `iwsdk.config.json`.
 
 ## Scripts
 

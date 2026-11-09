@@ -21,7 +21,7 @@ import bundledManifest from '../../public/assets/manifest.json';
 import { parseManifest } from '../assets/validate.js';
 import { ConversionAnimation } from '../conversion/animation.js';
 import { conversionPhase } from '../conversion/phases.js';
-import { makeFurniture, updateFurniture } from '../scenes/furniture.js';
+import { makePlacedObject, updatePlacedObject } from '../scenes/placed-object.js';
 import { SimulatedHand } from './hand.js';
 import { createContactShadow } from '../core/shadows.js';
 
@@ -47,7 +47,7 @@ const hand = new SimulatedHand();
 scene.add(hand.mesh);
 
 const { manifest } = parseManifest(bundledManifest);
-const sofaObject = manifest.objects.find((item) => item.scene === 'furniture');
+const sofaObject = manifest.objects.find((item) => item.scene === 'object3d');
 const bookObject = manifest.objects.find((item) => item.scene === 'book');
 const birdObject = manifest.objects.find((item) => item.label === 'bird');
 if (!sofaObject?.model || !bookObject?.model || !birdObject?.model) {
@@ -65,12 +65,12 @@ const conversion = new ConversionAnimation();
 scene.add(conversion.group);
 
 const sofaModel = await loadModel(sofaDef);
-const furniture = makeFurniture(sofaDef, sofaModel);
-furniture.root.position.set(0, 0, 0);
-scene.add(furniture.root);
+const placedObject = makePlacedObject(sofaDef, sofaModel);
+placedObject.root.position.set(0, 0, 0);
+scene.add(placedObject.root);
 
 const bookModel = await loadModel(bookDef);
-const book = makeFurniture(bookDef, bookModel);
+const book = makePlacedObject(bookDef, bookModel);
 book.root.position.set(0, 0.7, 0);
 scene.add(book.root);
 
@@ -141,7 +141,7 @@ function slider(name: keyof AppConfig, min: number, max: number, step: number): 
 function visibleRoot(): Group {
   if (tab === 'book') return book.root;
   if (tab === 'movie') return bird;
-  return furniture.root;
+  return placedObject.root;
 }
 
 function renderControls(): void {
@@ -149,7 +149,7 @@ function renderControls(): void {
   readout.textContent = `${tab}\nsize ${measured.width.toFixed(2)} x ${measured.height.toFixed(2)} x ${measured.depth.toFixed(2)} m\ntriangles ${measured.triangles}`;
   if (tab === 'conversion') {
     controlsEl.innerHTML = `${slider('popOutSeconds', 0.3, 3, 0.1)}<label>progress <input id="progress" type="range" min="0" max="1" step="0.01" value="0"></label>`;
-  } else if (tab === 'furniture') {
+  } else if (tab === 'object3d') {
     controlsEl.innerHTML = `${slider('jellyStiffness', 10, 200, 1)}${slider('jellyDamping', 1, 20, 0.5)}<button id="drop">Drop from height</button>`;
   } else if (tab === 'book') {
     controlsEl.innerHTML = `${slider('bookHoldSeconds', 0.2, 3, 0.1)}${slider('bookPalmMin', 0.05, 0.3, 0.01)}${slider('bookPalmMax', 0.3, 0.8, 0.01)}`;
@@ -169,9 +169,9 @@ function renderControls(): void {
     conversion.update(Number((event.target as HTMLInputElement).value));
   });
   document.getElementById('drop')?.addEventListener('click', () => {
-    furniture.root.position.y = 1.2;
-    furniture.falling = true;
-    furniture.velocityY = 0;
+    placedObject.root.position.y = 1.2;
+    placedObject.falling = true;
+    placedObject.velocityY = 0;
   });
 }
 
@@ -198,14 +198,14 @@ frameVisible();
 function loop(): void {
   requestAnimationFrame(loop);
   const dt = paused ? 0 : clock.getDelta() * slow;
-  furniture.root.visible = tab === 'furniture';
+  placedObject.root.visible = tab === 'object3d';
   book.root.visible = tab === 'book';
   conversion.group.visible = tab === 'conversion';
   bird.visible = tab === 'movie';
   table.visible = tab === 'book';
-  if (tab === 'furniture') {
-    updateFurniture(
-      furniture,
+  if (tab === 'object3d') {
+    updatePlacedObject(
+      placedObject,
       dt,
       [{ id: 'lab', origin: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, horizontal: true, source: 'default' }],
       hand.palm && hand.pinch,

@@ -1,7 +1,7 @@
 import { BoxGeometry, Group, Mesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createJellySpring, falloff, stepJellySpring, volumePreservingSquash } from '../../src/core/jelly.js';
-import { isOnSeatTop, makeFurniture, pressSeat, setFurnitureContacts, updateFurniture } from '../../src/scenes/furniture.js';
+import { isOnSeatTop, makePlacedObject, pressSeat, setObjectContacts, updatePlacedObject } from '../../src/scenes/placed-object.js';
 
 describe('jelly', () => {
   it('springs toward a press then settles', () => {
@@ -27,15 +27,15 @@ describe('jelly', () => {
     const mesh = new Mesh(new BoxGeometry(1, 1, 1));
     mesh.position.y = 0.5;
     model.add(mesh);
-    const item = makeFurniture({ id: 'sofa', scene: 'furniture', label: 'sofa', realSize: 1 }, model);
+    const item = makePlacedObject({ id: 'sofa', scene: 'object3d', label: 'sofa', realSize: 1 }, model);
     item.visual.updateWorldMatrix(true, true);
     expect(isOnSeatTop(item, { x: 0, y: 0.6, z: 0 })).toBe(true);
     expect(isOnSeatTop(item, { x: 0, y: 0.05, z: 0 })).toBe(false);
     pressSeat(item, { x: 0, y: 0.6, z: 0 });
     expect(item.squash.velocity).toBeLessThan(0);
     expect(item.squash.displacement).toBeLessThanOrEqual(0.78);
-    setFurnitureContacts(item, [{ x: 0, y: 0.6, z: 0, strength: 1, time: 0 }]);
-    updateFurniture(item, 0.016, [], false, false, 0, true);
+    setObjectContacts(item, [{ x: 0, y: 0.6, z: 0, strength: 1, time: 0 }]);
+    updatePlacedObject(item, 0.016, [], false, false, 0, true);
     expect(item.visual.scale.y).toBeCloseTo(1);
     expect(item.jelly.uDepth.value).toBeGreaterThan(0);
   });

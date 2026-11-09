@@ -17,7 +17,7 @@ Fast checks: `?fast=1` (short reveal), `?movie=ready`, `?object=duck`, `?open=so
 - [ ] Surfaces: floor and a table are found, or palm-touch fallback works at least 8 times out of 10.
 - [ ] Library: slide left opens it, slide right closes it, cards are easy to poke or pinch, a photo opens wide.
 - [ ] Sofa: long press on the sofa in the photo loads the real sofa GLB; you can hold and place it while seated.
-- [ ] Furniture: real-size scale looks right; pressing and dropping feel springy, not glitchy.
+- [ ] 3D object: real-size scale looks right; pressing and dropping feel springy, not glitchy.
 - [ ] Book: explorer closed, nothing on screen; opening a real book (two hands on the table) and long-pressing with a finger on the page converts a real 3D object. Floor holds do nothing.
 - [ ] Movie processing: selecting the movie starts Processing, the card shows progress while the video and models load, then Ready. Reload keeps Ready.
 - [ ] Movie mode: an MP4 in Finder starts Processing then Ready; the film plays; reconstructed objects appear; touching triggers a reaction; poking the screen pauses and resumes.

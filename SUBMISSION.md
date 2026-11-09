@@ -15,9 +15,9 @@ Scene Echoes starts with a clean view of your real room. Nothing is added until 
 
 Or skip the explorer. The book scene puts nothing on the screen. Open a real picture book; when two hands rest on the page and you long-press with a finger, that picture becomes a 3D object you can pick up and move.
 
-Pick an MP4 and the card says Processing while frames are named and reconstructed. Come back when it says Ready. A floating screen plays the film. Objects from the video appear in the room. Touch them and they react. Poke the screen to pause. Pinch to move them; two hands scale furniture.
+Pick an MP4 and the card says Processing while frames are named and reconstructed. Come back when it says Ready. A floating screen plays the film. Objects from the video appear in the room. Touch them and they react. Poke the screen to pause. Pinch to move them; two hands scale objects.
 
-The app is built with the Immersive Web SDK for WebXR on Quest Browser: `immersive-ar` passthrough, hand tracking, plane and mesh detection, anchors, optional depth occlusion, and SDK grabbing. Custom code covers the explorer, long-press conversion reveal, book pose detection, furniture squash, movie timeline and behaviors. All sounds except the film soundtrack are generated in Web Audio and placed at the object.
+The app is built with the Immersive Web SDK for WebXR on Quest Browser: `immersive-ar` passthrough, hand tracking, plane and mesh detection, anchors, optional depth occlusion, and SDK grabbing. Custom code covers the explorer, long-press conversion reveal, book pose detection, object squash, movie timeline and behaviors. All sounds except the film soundtrack are generated in Web Audio and placed at the object.
 
 **This is a prototype.** The browser does not give apps camera pictures, so the app cannot see the printed page. An open-book hand pose (two palms apart at table height) plus a still fingertip on an elevated surface starts the book conversion. The sofa and duck GLBs are bundled for the hosted demo. Local development can call Gemini and SAM 3D through a same-origin Node plugin so keys never enter the Quest browser bundle. GitHub Pages stays on the bundled models.
 

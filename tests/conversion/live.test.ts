@@ -20,7 +20,7 @@ function mockFetch(handler: (url: string, init?: RequestInit) => Promise<Respons
   }) as typeof fetch;
 }
 
-const sofa = [{ id: 'sofa', scene: 'furniture' as const, label: 'sofa', realSize: 2 }];
+const sofa = [{ id: 'sofa', scene: 'object3d' as const, label: 'sofa', realSize: 2 }];
 
 describe('live conversion client', () => {
   afterEach(() => {

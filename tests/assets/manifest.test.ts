@@ -17,7 +17,7 @@ describe('manifest and explorer', () => {
   it('flags a missing required field', () => {
     const issues = validateManifestObject({
       id: 'broken',
-      scene: 'furniture',
+      scene: 'object3d',
       label: 'sofa',
       realSize: undefined as unknown as number,
     });

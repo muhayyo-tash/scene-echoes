@@ -25,7 +25,7 @@ export interface LocalJelly {
   uDepth: { value: number };
 }
 
-export interface PlacedFurniture {
+export interface PlacedObject {
   id: string;
   object: ManifestObject;
   root: Group;
@@ -104,7 +104,7 @@ uniform float uDepth;`,
   return next;
 }
 
-function applyLocalJelly(item: PlacedFurniture): void {
+function applyLocalJelly(item: PlacedObject): void {
   const vecs = item.jelly.contactVecs;
   for (let i = 0; i < 6; i++) {
     const contact = item.contacts[i];
@@ -116,7 +116,7 @@ function applyLocalJelly(item: PlacedFurniture): void {
   item.jelly.uRadius.value = Math.max(config.jellyRadius, item.object.realSize * 0.16);
 }
 
-export function makeFurniture(object: ManifestObject, model: Group): PlacedFurniture {
+export function makePlacedObject(object: ManifestObject, model: Group): PlacedObject {
   const shadow = createContactShadow(object.realSize * 0.35);
   const jelly = attachLocalJelly(model);
   const root = new Group();
@@ -138,39 +138,39 @@ export function makeFurniture(object: ManifestObject, model: Group): PlacedFurni
   };
 }
 
-export function setFurnitureContacts(item: PlacedFurniture, points: ContactPoint[]): void {
+export function setObjectContacts(item: PlacedObject, points: ContactPoint[]): void {
   item.contacts = points.slice(0, 6);
 }
 
-const seatBox = new Box3();
-const seatSize = new Vector3();
-const seatPoint = new Vector3();
+const contactBox = new Box3();
+const contactSize = new Vector3();
+const contactPoint = new Vector3();
 
-export function isOnSeatTop(item: PlacedFurniture, point: { x: number; y: number; z: number }): boolean {
-  seatBox.setFromObject(item.visual);
-  if (seatBox.isEmpty()) return false;
-  seatBox.getSize(seatSize);
-  const pad = Math.max(0.05, seatSize.x * 0.08);
-  const seatMinY = seatBox.min.y + seatSize.y * 0.32;
-  const seatMaxY = seatBox.min.y + seatSize.y * 0.82;
+export function isOnSeatTop(item: PlacedObject, point: { x: number; y: number; z: number }): boolean {
+  contactBox.setFromObject(item.visual);
+  if (contactBox.isEmpty()) return false;
+  contactBox.getSize(contactSize);
+  const pad = Math.max(0.05, contactSize.x * 0.08);
+  const seatMinY = contactBox.min.y + contactSize.y * 0.32;
+  const seatMaxY = contactBox.min.y + contactSize.y * 0.82;
   return (
     point.y >= seatMinY &&
     point.y <= seatMaxY + 0.06 &&
-    point.x >= seatBox.min.x - pad &&
-    point.x <= seatBox.max.x + pad &&
-    point.z >= seatBox.min.z - pad &&
-    point.z <= seatBox.max.z + pad
+    point.x >= contactBox.min.x - pad &&
+    point.x <= contactBox.max.x + pad &&
+    point.z >= contactBox.min.z - pad &&
+    point.z <= contactBox.max.z + pad
   );
 }
 
-export function isOnFurniture(item: PlacedFurniture, point: { x: number; y: number; z: number }): boolean {
-  seatBox.setFromObject(item.visual);
-  if (seatBox.isEmpty()) return false;
-  seatBox.expandByScalar(0.06);
-  return seatBox.containsPoint(seatPoint.set(point.x, point.y, point.z));
+export function isOnObject(item: PlacedObject, point: { x: number; y: number; z: number }): boolean {
+  contactBox.setFromObject(item.visual);
+  if (contactBox.isEmpty()) return false;
+  contactBox.expandByScalar(0.06);
+  return contactBox.containsPoint(contactPoint.set(point.x, point.y, point.z));
 }
 
-export function pressSeat(item: PlacedFurniture, point?: { x: number; y: number; z: number }): void {
+export function pressSeat(item: PlacedObject, point?: { x: number; y: number; z: number }): void {
   item.squash.displacement = Math.min(item.squash.displacement, 0.78);
   item.squash.velocity = -2.8;
   if (point) {
@@ -178,8 +178,8 @@ export function pressSeat(item: PlacedFurniture, point?: { x: number; y: number;
   }
 }
 
-export function updateFurniture(
-  item: PlacedFurniture,
+export function updatePlacedObject(
+  item: PlacedObject,
   dt: number,
   surfaces: RoomSurface[],
   palmPress: boolean,
@@ -191,7 +191,7 @@ export function updateFurniture(
   const target = item.contacts.reduce((max, c) => Math.max(max, c.strength), 0);
   stepJellySpring(item.spring, target, dt, config.jellyStiffness, config.jellyDamping);
   const squashTarget =
-    item.object.scene === 'furniture'
+    item.object.scene === 'object3d'
       ? seatPress || palmPress
         ? 0.7
         : poke
@@ -208,7 +208,7 @@ export function updateFurniture(
   }
 
   if (item.falling) {
-    item.velocityY -= config.furnitureGravity * dt;
+    item.velocityY -= config.objectGravity * dt;
     item.root.position.y += item.velocityY * dt;
     const surface = nearestHorizontal(surfaces, {
       x: item.root.position.x,
@@ -218,7 +218,7 @@ export function updateFurniture(
     const floorY = surface ? projectOntoSurface(item.root.position, surface).y : 0;
     if (item.root.position.y <= floorY) {
       item.root.position.y = floorY;
-      if (item.bounces < config.furnitureBounces && Math.abs(item.velocityY) > 0.4) {
+      if (item.bounces < config.objectBounces && Math.abs(item.velocityY) > 0.4) {
         item.velocityY = -item.velocityY * config.dropRestitution;
         item.bounces += 1;
         item.squash.displacement = 0.75;
@@ -232,13 +232,13 @@ export function updateFurniture(
   updateContactShadow(item.shadow, !item.falling, lift, item.object.realSize * 0.25 * item.scale);
 }
 
-export function dropFurniture(item: PlacedFurniture): void {
+export function dropObject(item: PlacedObject): void {
   item.falling = true;
   item.bounces = 0;
   item.velocityY = 0;
 }
 
-export function resizeFurniture(item: PlacedFurniture, factor: number): void {
-  item.scale = Math.min(config.furnitureMaxScale, Math.max(config.furnitureMinScale, factor));
+export function resizeObject(item: PlacedObject, factor: number): void {
+  item.scale = Math.min(config.objectMaxScale, Math.max(config.objectMinScale, factor));
   item.root.scale.setScalar(item.scale);
 }

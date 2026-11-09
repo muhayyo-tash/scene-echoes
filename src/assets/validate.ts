@@ -67,8 +67,8 @@ export function validateManifestObject(object: ManifestObject): ValidationIssue[
       message: `Object ${object.id} has no model path`,
     });
   }
-  if (object.scene === 'furniture' && !object.hotspot) {
-    issues.push({ level: 'warning', message: `Furniture ${object.id} has no hotspot` });
+  if (object.scene === 'object3d' && !object.hotspot) {
+    issues.push({ level: 'warning', message: `Object ${object.id} has no hotspot` });
   }
   if (object.hotspot && !isHotspot(object.hotspot)) {
     issues.push({ level: 'error', message: `Object ${object.id} has an invalid hotspot` });

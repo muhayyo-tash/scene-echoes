@@ -26,7 +26,7 @@ export class ManifestModelSource implements ModelSource {
       this.emit({ progress: 1, status: 'done' });
       return { object, root, source: 'manifest' };
     };
-    if (object.scene === 'furniture') {
+    if (object.scene === 'object3d') {
       return requestPhotoConversion(
         {
           objectId: id,

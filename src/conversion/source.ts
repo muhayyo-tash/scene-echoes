@@ -31,7 +31,7 @@ export function createModelSource(
     parseModel: async (bytes, status, id) => {
       const catalog = objects.find((entry) => entry.id === id);
       const object: ManifestObject = {
-        ...(catalog ?? { id, scene: 'furniture', label: id, realSize: status.realSize ?? 1 }),
+        ...(catalog ?? { id, scene: 'object3d', label: id, realSize: status.realSize ?? 1 }),
         label: status.label ?? catalog?.label ?? id,
         realSize: status.realSize ?? catalog?.realSize ?? 1,
         up: status.up ?? catalog?.up ?? 'y',

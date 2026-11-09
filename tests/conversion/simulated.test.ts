@@ -12,7 +12,7 @@ describe('manifest conversion', () => {
 
   it('loads the bundled model immediately through ModelSource', async () => {
     const source = new ManifestModelSource(
-      [{ id: 'sofa', scene: 'furniture', label: 'sofa', realSize: 2 }],
+      [{ id: 'sofa', scene: 'object3d', label: 'sofa', realSize: 2 }],
       async (object) => ({ id: object.id }),
     );
     const progress: number[] = [];
@@ -27,7 +27,7 @@ describe('manifest conversion', () => {
     const uv = { x: 0.51, y: 0.4 };
     const handle = await requestPhotoConversion(
       { objectId: 'sofa', imagePath: 'assets/photos/sofa.jpg', uv },
-      async () => ({ object: { id: 'sofa', scene: 'furniture', label: 'sofa', realSize: 1.5 }, root: { uv }, source: 'manifest' }),
+      async () => ({ object: { id: 'sofa', scene: 'object3d', label: 'sofa', realSize: 1.5 }, root: { uv }, source: 'manifest' }),
     );
     expect(handle.source).toBe('manifest');
     expect(handle.root).toEqual({ uv });

@@ -129,7 +129,7 @@ export class LiveConversionModelSource implements ModelSource {
     }
     const object: ManifestObject = {
       id,
-      scene: 'furniture',
+      scene: 'object3d',
       label: status.label ?? id,
       realSize: status.realSize ?? 1,
       up: status.up ?? 'y',

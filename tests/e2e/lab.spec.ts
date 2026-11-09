@@ -7,7 +7,7 @@ test('lab tabs run without console errors', async ({ page }) => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
   await page.goto('/lab.html');
-  for (const name of ['Conversion', 'Furniture', 'Book', 'Movie', 'Hotspot picker']) {
+  for (const name of ['Conversion', '3D Object', 'Book', 'Movie', 'Hotspot picker']) {
     await page.getByRole('button', { name }).click();
     await page.waitForTimeout(200);
   }

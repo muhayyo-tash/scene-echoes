@@ -1,4 +1,4 @@
-export type SceneKind = 'furniture' | 'book' | 'movie';
+export type SceneKind = 'object3d' | 'book' | 'movie';
 export type ObjectKind = 'object' | 'effect';
 export type UpAxis = 'y' | 'z';
 export type Landing = 'float' | 'perch';
