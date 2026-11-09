@@ -131,6 +131,9 @@ export class SceneEchoesApp {
   twoHandScale: number | null = null;
   private twoHandScaleBase: number | null = null;
   private grabOffset = new Vector3();
+  /** Yaw-only spin while holding a 3D object (no pitch/roll). */
+  private grabYaw = { object: 0, hand: 0 };
+  private twoHandYaw = { object: 0, hands: 0 };
   hintPlayed = { slide: false, pinch: false };
   time = 0;
   fps = 0;
@@ -816,6 +819,10 @@ export class SceneEchoesApp {
         );
         this.grab = { kind: 'object3d', id: grabbed.id, hand: activeHand.handedness };
         this.carrying = grabbed.root;
+        this.grabYaw = {
+          object: grabbed.root.rotation.y,
+          hand: handHorizontalYaw(activeHand, p, grabbed.root.position),
+        };
         this.audio.play('whoosh', grabbed.root.position);
       } else {
         const movieObj = this.movie.objects.find((o) => o.root.position.distanceTo(p as never) < 0.4);
@@ -861,6 +868,12 @@ export class SceneEchoesApp {
         pinch.y + this.grabOffset.y,
         pinch.z + this.grabOffset.z,
       );
+      if (this.grab.kind === 'object3d') {
+        const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
+        target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
+        target.rotation.x = 0;
+        target.rotation.z = 0;
+      }
     }
     if (this.grab.kind === 'screen') {
       this.screen.group.position.set(pinch.x, pinch.y, pinch.z);
@@ -898,13 +911,19 @@ export class SceneEchoesApp {
       this.endTwoHandResize();
       return false;
     }
+    const handsYaw = Math.atan2(rightPinch.x - leftPinch.x, rightPinch.z - leftPinch.z);
     if (this.twoHandScale === null || this.twoHandScaleBase === null) {
       this.twoHandScale = distance;
       this.twoHandScaleBase = item.scale;
+      this.twoHandYaw = { object: item.root.rotation.y, hands: handsYaw };
       item.falling = false;
       setObjectContacts(item, []);
       return true;
     }
+    // Spin left/right from the two-hand line; never tilt up/down.
+    item.root.rotation.y = this.twoHandYaw.object + (handsYaw - this.twoHandYaw.hands);
+    item.root.rotation.x = 0;
+    item.root.rotation.z = 0;
     const ratio = distance / this.twoHandScale;
     // Deadzone: ignore tiny hand wobble so the shape stays stable.
     if (Math.abs(ratio - 1) < 0.08) return true;
@@ -918,6 +937,7 @@ export class SceneEchoesApp {
     if (this.twoHandScale === null) return;
     this.twoHandScale = null;
     this.twoHandScaleBase = null;
+    this.twoHandYaw = { object: 0, hands: 0 };
   }
 
   private releaseGrab(): void {
@@ -939,6 +959,8 @@ export class SceneEchoesApp {
     this.landingRing.visible = false;
     this.twoHandScale = null;
     this.twoHandScaleBase = null;
+    this.grabYaw = { object: 0, hand: 0 };
+    this.twoHandYaw = { object: 0, hands: 0 };
     this.grabOffset.set(0, 0, 0);
   }
 
@@ -1310,6 +1332,19 @@ function forwardFrom(q: { x: number; y: number; z: number; w: number }): { x: nu
   const z = 1 - 2 * (q.y * q.y + q.z * q.z);
   const len = Math.hypot(x, z) || 1;
   return { x: x / len, z: -Math.abs(z) / len || -1 };
+}
+
+/** Horizontal-only facing from the hand — used to yaw objects without pitching. */
+function handHorizontalYaw(
+  hand: { rayDirection: { x: number; y: number; z: number } | null },
+  pinch: { x: number; y: number; z: number },
+  objectPos: { x: number; y: number; z: number },
+): number {
+  const dir = hand.rayDirection;
+  if (dir && Math.hypot(dir.x, dir.z) > 0.001) {
+    return Math.atan2(dir.x, dir.z);
+  }
+  return Math.atan2(pinch.x - objectPos.x, pinch.z - objectPos.z);
 }
 
 function worldToPhotoUv(
