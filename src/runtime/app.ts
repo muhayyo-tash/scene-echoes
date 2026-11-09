@@ -126,9 +126,10 @@ export class SceneEchoesApp {
   private sceneCaptureBusy = false;
   pendingConverted: { object: ManifestObject; model: Group; origin: Vector3 } | null = null;
   grab:
-    | { kind: 'furniture' | 'movie' | 'screen'; id: string; hand: 'left' | 'right' }
+    | { kind: 'furniture' | 'movie' | 'screen' | 'explorer'; id: string; hand: 'left' | 'right' }
     | null = null;
   twoHandScale: number | null = null;
+  private twoHandScaleBase: number | null = null;
   private grabOffset = new Vector3();
   hintPlayed = { slide: false, pinch: false };
   time = 0;
@@ -461,7 +462,9 @@ export class SceneEchoesApp {
 
     // Invisible hand target-ray for Finder only (no white line). Point at a
     // card/icon and pinch to open — fingertip poke still works as a fallback.
+    // Skip UI clicks while dragging Finder itself.
     for (const hand of [this.hands.left, this.hands.right]) {
+      if (this.grab?.kind === 'explorer') break;
       const target = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (target?.kind === 'card' && target.cardId) hover = target.cardId;
       if (!hand.justPinched || !target) continue;
@@ -723,6 +726,11 @@ export class SceneEchoesApp {
 
   private updateGrab(dt: number, input: FrameInput): void {
     this.landingRing.visible = false;
+    if (this.updateTwoHandResize()) {
+      void dt;
+      return;
+    }
+
     const activeHand = this.grab
       ? this.grab.hand === 'left'
         ? this.hands.left
@@ -742,6 +750,19 @@ export class SceneEchoesApp {
     if (!this.grab) {
       if (!activeHand?.pinched || !activeHand.pinchPosition) return;
       const p = activeHand.pinchPosition;
+      if (
+        this.space.explorerOpen &&
+        !this.space.photoOpen &&
+        this.explorer.hitMoveHandle(p, 0.14)
+      ) {
+        this.grabOffset.set(
+          this.explorer.group.position.x - p.x,
+          this.explorer.group.position.y - p.y,
+          this.explorer.group.position.z - p.z,
+        );
+        this.grab = { kind: 'explorer', id: 'finder', hand: activeHand.handedness };
+        return;
+      }
       const furniture = this.furniture.find((f) => this.canGrabFurniture(f, p));
       if (furniture) {
         furniture.falling = false;
@@ -775,9 +796,23 @@ export class SceneEchoesApp {
 
     if (!this.grab || !activeHand?.pinchPosition) return;
     const pinch = activeHand.pinchPosition;
+    if (this.grab.kind === 'explorer') {
+      this.explorer.moveTo(
+        {
+          x: pinch.x + this.grabOffset.x,
+          y: pinch.y + this.grabOffset.y,
+          z: pinch.z + this.grabOffset.z,
+        },
+        {
+          x: input.head.position.x,
+          y: input.head.position.y - config.chestOffset,
+          z: input.head.position.z,
+        },
+      );
+      return;
+    }
     const target = this.grabTarget();
     if (target && this.grab.kind !== 'screen') {
-      // Object sticks to the pinched fingers and moves with the hand.
       target.position.set(
         pinch.x + this.grabOffset.x,
         pinch.y + this.grabOffset.y,
@@ -787,26 +822,61 @@ export class SceneEchoesApp {
     if (this.grab.kind === 'screen') {
       this.screen.group.position.set(pinch.x, pinch.y, pinch.z);
     }
-    if (this.grab.kind === 'furniture' && this.hands.left.pinched && this.hands.right.pinched) {
-      const d =
-        this.hands.left.pinchPosition && this.hands.right.pinchPosition
-          ? Math.hypot(
-              this.hands.left.pinchPosition.x - this.hands.right.pinchPosition.x,
-              this.hands.left.pinchPosition.y - this.hands.right.pinchPosition.y,
-              this.hands.left.pinchPosition.z - this.hands.right.pinchPosition.z,
-            )
-          : 0;
-      if (this.twoHandScale === null) this.twoHandScale = d;
-      else {
-        const item = this.furniture.find((f) => f.id === this.grab?.id);
-        if (item && this.twoHandScale > 0) resizeFurniture(item, item.scale * (d / this.twoHandScale));
-        this.twoHandScale = d;
-      }
-    } else {
-      this.twoHandScale = null;
-    }
     void dt;
-    void input;
+  }
+
+  /**
+   * Two hands on opposite sides of an object: move apart to grow, together to shrink.
+   * Works with pinched fingers or open fingertips resting on the object.
+   */
+  private updateTwoHandResize(): boolean {
+    const leftTip =
+      this.hands.left.pinchPosition ?? this.hands.left.indexTip ?? this.hands.left.palm;
+    const rightTip =
+      this.hands.right.pinchPosition ?? this.hands.right.indexTip ?? this.hands.right.palm;
+    if (!leftTip || !rightTip) {
+      this.endTwoHandResize();
+      return false;
+    }
+    const item = this.furniture.find(
+      (f) => this.canGrabFurniture(f, leftTip) && this.canGrabFurniture(f, rightTip),
+    );
+    if (!item) {
+      this.endTwoHandResize();
+      return false;
+    }
+    const bothContact =
+      (this.hands.left.pinched || isOnFurniture(item, leftTip)) &&
+      (this.hands.right.pinched || isOnFurniture(item, rightTip));
+    if (!bothContact) {
+      this.endTwoHandResize();
+      return false;
+    }
+    const distance = Math.hypot(
+      leftTip.x - rightTip.x,
+      leftTip.y - rightTip.y,
+      leftTip.z - rightTip.z,
+    );
+    if (distance < 0.04) return this.twoHandScale !== null;
+    if (this.twoHandScale === null || this.twoHandScaleBase === null) {
+      this.twoHandScale = distance;
+      this.twoHandScaleBase = item.scale;
+      item.falling = false;
+      return true;
+    }
+    resizeFurniture(item, this.twoHandScaleBase * (distance / this.twoHandScale));
+    item.root.position.set(
+      (leftTip.x + rightTip.x) * 0.5,
+      (leftTip.y + rightTip.y) * 0.5,
+      (leftTip.z + rightTip.z) * 0.5,
+    );
+    return true;
+  }
+
+  private endTwoHandResize(): void {
+    if (this.twoHandScale === null) return;
+    this.twoHandScale = null;
+    this.twoHandScaleBase = null;
   }
 
   private releaseGrab(): void {
@@ -827,6 +897,7 @@ export class SceneEchoesApp {
     this.carrying = null;
     this.landingRing.visible = false;
     this.twoHandScale = null;
+    this.twoHandScaleBase = null;
     this.grabOffset.set(0, 0, 0);
   }
 

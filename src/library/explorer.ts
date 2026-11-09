@@ -45,9 +45,12 @@ export class FileExplorer {
   cards: ExplorerCard[] = [];
   openPhoto: Mesh | null = null;
   visible = false;
+  /** True after the user pinches and moves Finder; keeps that placement. */
+  userPlaced = false;
   folder: FinderSection = 'pictures';
   private panel!: Mesh;
   private closeHit!: Mesh;
+  private moveHit!: Mesh;
   private sidebarHits: Mesh[] = [];
   private hoverId: string | null = null;
   private layouts: CardLayout[] = [];
@@ -114,13 +117,40 @@ export class FileExplorer {
   setOpen(open: boolean, chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
     this.visible = open;
     this.group.visible = open && !this.photoGroup.visible;
-    if (!open) return;
+    if (!open) {
+      this.userPlaced = false;
+      return;
+    }
+    if (this.userPlaced) return;
     this.group.position.set(
       chest.x + forward.x * config.explorerDistance,
       chest.y + 0.04,
       chest.z + forward.z * config.explorerDistance,
     );
     this.group.lookAt(chest.x, chest.y, chest.z);
+  }
+
+  /** Pinch-drag the chrome title bar to reposition Finder. */
+  moveTo(
+    position: { x: number; y: number; z: number },
+    lookAt: { x: number; y: number; z: number },
+  ): void {
+    this.userPlaced = true;
+    this.group.position.set(position.x, position.y, position.z);
+    this.group.lookAt(lookAt.x, lookAt.y, lookAt.z);
+  }
+
+  hitMoveHandle(point: { x: number; y: number; z: number }, radius = 0.12): boolean {
+    if (!this.visible || !this.group.visible) return false;
+    if (this.hitClose(point, 0.07) || this.hitFolder(point, 0.08) || this.hitTest(point, 0.1)) {
+      return false;
+    }
+    this.moveHit.updateWorldMatrix(true, true);
+    this.moveHit.getWorldPosition(this.world);
+    if (this.world.distanceTo(point as never) < radius) return true;
+    this.panel.updateWorldMatrix(true, true);
+    this.panel.getWorldPosition(this.world);
+    return this.world.distanceTo(point as never) < Math.max(radius, FINDER_WIDTH * 0.42);
   }
 
   hover(id: string | null): void {
@@ -279,6 +309,12 @@ export class FileExplorer {
     );
     this.closeHit.position.set(-FINDER_WIDTH * 0.44, FINDER_HEIGHT * 0.42, 0.01);
     this.closeHit.userData.close = true;
+    this.moveHit = new Mesh(
+      new PlaneGeometry(FINDER_WIDTH * 0.72, FINDER_HEIGHT * 0.12),
+      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+    );
+    this.moveHit.position.set(0.02, FINDER_HEIGHT * 0.42, 0.01);
+    this.moveHit.userData.finderMove = true;
     const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
     const sideX = -FINDER_WIDTH * 0.39;
     folders.forEach((id, index) => {
@@ -291,7 +327,7 @@ export class FileExplorer {
       this.sidebarHits.push(hit);
       this.group.add(hit);
     });
-    this.group.add(this.panel, this.closeHit);
+    this.group.add(this.panel, this.closeHit, this.moveHit);
   }
 
   private chromeTexture(): CanvasTexture {
