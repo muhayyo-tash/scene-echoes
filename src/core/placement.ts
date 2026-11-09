@@ -23,6 +23,24 @@ export function farPlacePoint(
   return { point: projected, surface };
 }
 
+/** Place a new object a short step in front of the player, not at the hand. */
+export function spawnInFront(
+  head: Vec3,
+  forward: { x: number; z: number },
+  surfaces: RoomSurface[],
+  distance: number,
+  chestOffset: number,
+): { point: Vec3; surface: RoomSurface | null } {
+  const point = {
+    x: head.x + forward.x * distance,
+    y: head.y - chestOffset,
+    z: head.z + forward.z * distance,
+  };
+  const surface = nearestHorizontal(surfaces, point);
+  if (!surface) return { point, surface: null };
+  return { point: projectOntoSurface(point, surface), surface };
+}
+
 export function uprightYawFromWrist(
   wristDeltaX: number,
   wristDeltaZ: number,

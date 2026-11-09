@@ -8,7 +8,7 @@
       "model": "assets/models/sofa.glb",
       "kind": "object",
       "label": "sofa",
-      "realSize": 0.75,
+      "realSize": 0.5,
       "up": "y",
       "baseOffset": 0,
       "hotspot": { "type": "circle", "x": 0.5, "y": 0.4, "r": 0.32 }

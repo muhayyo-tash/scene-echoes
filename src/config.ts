@@ -56,7 +56,7 @@ const numericDefaults = {
   pollIntervalSeconds: 1,
   furnitureGravity: 9.8,
   dropRestitution: 0.35,
-  flickSpeed: 1.8,
+  flickSpeed: 3.2,
   explorerTiltDegrees: 0,
   openPhotoTiltDegrees: 0,
   videoMinScale: 0.7,
@@ -65,6 +65,11 @@ const numericDefaults = {
   defaultFloorHandOffset: 0.1,
   ghostHintSeconds: 4,
   handlessDelaySeconds: 0.6,
+  /** How far in front of the headset a new 3D object appears (meters). */
+  spawnDistance: 1.15,
+  /** Cap so a flower or car does not spawn life-size beside the player. */
+  maxSpawnRealSize: 0.5,
+  grabReachPad: 0.14,
 } as const;
 
 export type NumericConfig = { -readonly [K in keyof typeof numericDefaults]: number };

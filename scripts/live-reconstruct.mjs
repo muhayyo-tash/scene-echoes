@@ -95,7 +95,7 @@ export function createJob() {
     files: {},
     label: '',
     error: null,
-    realSize: 0.75,
+    realSize: 0.5,
     up: 'y',
   };
   jobs.set(id, job);
