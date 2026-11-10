@@ -12,7 +12,13 @@ export type SfxName =
   | 'spin'
   | 'glow'
   | 'dart'
-  | 'pause';
+  | 'pause'
+  /** Meta-keyboard-style key down (short mechanical click). */
+  | 'click'
+  /** Soft tick while a long-press fills. */
+  | 'tick'
+  /** Key/button release. */
+  | 'clickUp';
 
 interface Voice {
   stop: () => void;
@@ -85,6 +91,17 @@ export class AudioEngine {
       case 'shimmer':
         this.tone(dest, now, 1200, 0.3, 'triangle', 0.06);
         this.tone(dest, now + 0.1, 1600, 0.25, 'triangle', 0.04);
+        break;
+      case 'click':
+        // Short band-limited burst — reads like a Quest keyboard key-down.
+        this.noiseSweep(dest, now, 0.045, 2400, 900, 0.16);
+        this.tone(dest, now, 1600, 0.04, 'square', 0.05);
+        break;
+      case 'clickUp':
+        this.noiseSweep(dest, now, 0.03, 1800, 700, 0.08);
+        break;
+      case 'tick':
+        this.tone(dest, now, 980, 0.05, 'triangle', 0.045);
         break;
       case 'wobble':
       case 'hop':

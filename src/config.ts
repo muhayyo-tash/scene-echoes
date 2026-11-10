@@ -5,8 +5,8 @@ export const CONVERSION_API_PLACEHOLDER = 'https://example.invalid';
 const numericDefaults = {
   pinchOnDistance: 0.035,
   pinchOffDistance: 0.055,
-  longPressSeconds: 0.8,
-  longPressMoveTolerance: 0.02,
+  longPressSeconds: 0.65,
+  longPressMoveTolerance: 0.12,
   pokeDepth: 0.015,
   pokeCooldownMs: 300,
   palmTouchDistance: 0.03,

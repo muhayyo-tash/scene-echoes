@@ -56,6 +56,10 @@ export class FileExplorer {
   private hoverId: string | null = null;
   private layouts: CardLayout[] = [];
   private readonly world = new Vector3();
+  /** Soft contact disc on the open print (Quest-keyboard style). */
+  private pokeDot: Mesh | null = null;
+  private pokeProgress: Mesh | null = null;
+  private photoRestScale = 1;
 
   constructor(
     private readonly entries: ExplorerEntry[],
@@ -225,9 +229,9 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Centered ahead of the user — not in the face (was ~0.45m).
-    const distance = 1.05;
-    const centerY = head.y - 0.02;
+    // Within arm reach so index poke works (Quest keyboard-style contact).
+    const distance = 0.62;
+    const centerY = head.y - 0.04;
     mesh.position.set(
       head.x + forward.x * distance,
       centerY,
@@ -245,7 +249,7 @@ export class FileExplorer {
     const guide = new Mesh(
       new PlaneGeometry(0.42, 0.07),
       new MeshBasicMaterial({
-        map: new CanvasTexture(makeGuidanceCanvas('Point with your index finger · long-press the object')),
+        map: new CanvasTexture(makeGuidanceCanvas('Touch the photo · hold to pop into 3D')),
         transparent: true,
         depthWrite: false,
       }),
@@ -255,6 +259,33 @@ export class FileExplorer {
     guide.translateY(-(height * 0.5 + 0.06));
     guide.translateZ(0.002);
     guide.userData.photoGuide = true;
+    // Contact highlight + hold-fill ring (parented in photo local space).
+    this.pokeDot = new Mesh(
+      new PlaneGeometry(0.05, 0.05),
+      new MeshBasicMaterial({
+        color: new Color('#ffffff'),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
+    );
+    this.pokeDot.position.z = 0.004;
+    this.pokeDot.visible = false;
+    this.pokeProgress = new Mesh(
+      new PlaneGeometry(0.09, 0.09),
+      new MeshBasicMaterial({
+        color: new Color('#5ac8fa'),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
+    );
+    this.pokeProgress.position.z = 0.005;
+    this.pokeProgress.visible = false;
+    mesh.add(this.pokeDot, this.pokeProgress);
+    this.photoRestScale = 1;
     this.photoGroup.add(shadow, mesh, guide);
     this.photoGroup.visible = true;
     this.group.visible = false;
@@ -265,9 +296,48 @@ export class FileExplorer {
     return mesh;
   }
 
+  /**
+   * Quest-keyboard style contact: brighten the touch point, press the print in,
+   * and grow a fill disc while the long-press charges.
+   */
+  setPhotoTouchFeedback(
+    uv: { x: number; y: number } | null,
+    progress: number,
+    contacting: boolean,
+  ): void {
+    const photo = this.openPhoto;
+    if (!photo || !this.pokeDot || !this.pokeProgress) return;
+    const size = photo.userData.photoSize as { width: number; height: number } | undefined;
+    const w = size?.width ?? config.openPhotoWidth;
+    const h = size?.height ?? config.openPhotoWidth * 0.75;
+    if (!contacting || !uv) {
+      this.pokeDot.visible = false;
+      this.pokeProgress.visible = false;
+      (this.pokeDot.material as MeshBasicMaterial).opacity = 0;
+      (this.pokeProgress.material as MeshBasicMaterial).opacity = 0;
+      photo.scale.setScalar(this.photoRestScale);
+      return;
+    }
+    const lx = (uv.x - 0.5) * w;
+    const ly = (0.5 - uv.y) * h;
+    this.pokeDot.visible = true;
+    this.pokeDot.position.set(lx, ly, 0.004);
+    (this.pokeDot.material as MeshBasicMaterial).opacity = 0.35 + Math.min(0.45, progress * 0.45);
+    this.pokeProgress.visible = progress > 0.02;
+    this.pokeProgress.position.set(lx, ly, 0.005);
+    const fill = 0.35 + progress * 0.9;
+    this.pokeProgress.scale.setScalar(fill);
+    (this.pokeProgress.material as MeshBasicMaterial).opacity = 0.2 + progress * 0.55;
+    // Button travel: slight squash toward the wearer (local +Z faces user).
+    photo.scale.setScalar(this.photoRestScale * (1 - Math.min(0.04, 0.012 + progress * 0.03)));
+  }
+
   closePhoto(): void {
+    this.setPhotoTouchFeedback(null, 0, false);
     this.photoGroup.visible = false;
     this.openPhoto = null;
+    this.pokeDot = null;
+    this.pokeProgress = null;
     this.dimOthers(null, false);
     this.group.visible = this.visible;
     this.iconGroup.visible = true;

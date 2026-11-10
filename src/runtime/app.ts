@@ -162,7 +162,10 @@ export class SceneEchoesApp {
     hand: 'left' | 'right' | null;
     elapsed: number;
     origin: { x: number; y: number; z: number } | null;
-  } = { hand: null, elapsed: 0, origin: null };
+    uv: { x: number; y: number } | null;
+    contacted: boolean;
+    lastTick: number;
+  } = { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0 };
   private desktopHold: {
     x: number;
     y: number;
@@ -647,63 +650,130 @@ export class SceneEchoesApp {
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
       photo.updateWorldMatrix(true, true);
-      // Index-finger long-press on the print (pinch not required).
+      // Index poke long-press (Meta touch: contact → hold → action). Prefer the
+      // hand already pressing so the other fingertip cannot reset the timer.
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
-      for (const hand of [this.hands.left, this.hands.right]) {
+      let holdUv: { x: number; y: number } | null = null;
+      const hands =
+        this.photoHold.hand === 'right'
+          ? [this.hands.right, this.hands.left]
+          : [this.hands.left, this.hands.right];
+      for (const hand of hands) {
         const tip = hand.indexTip;
         if (!tip || !object) continue;
-        const uv = worldToPhotoUv(tip, photo, 0.04);
+        // Direct poke first; if the tip is near the print, also accept the
+        // hand target-ray hit (Meta near-field assist when depth jitters).
+        let uv = worldToPhotoUv(tip, photo, 0.1);
+        if (!uv) {
+          const tipDist = photo.position.distanceTo(tip as never);
+          if (tipDist < 0.4 && hand.rayOrigin && hand.rayDirection) {
+            this.uiOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
+            this.uiDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
+            this.uiRaycaster.set(this.uiOrigin, this.uiDir);
+            const hit = this.uiRaycaster.intersectObject(photo, false)[0];
+            if (hit?.uv) uv = { x: hit.uv.x, y: 1 - hit.uv.y };
+            else if (hit) uv = worldToPhotoUv(hit.point, photo, 0.12);
+          }
+        }
         if (!uv) continue;
+        if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
         holding = true;
         holdTip = tip;
+        holdUv = uv;
         if (this.photoHold.hand !== hand.handedness || !this.photoHold.origin) {
           this.photoHold = {
             hand: hand.handedness,
             elapsed: 0,
             origin: { x: tip.x, y: tip.y, z: tip.z },
+            uv,
+            contacted: false,
+            lastTick: 0,
           };
         }
         const origin = this.photoHold.origin!;
         const moved = Math.hypot(tip.x - origin.x, tip.y - origin.y, tip.z - origin.z);
-        if (moved > 0.07) {
+        if (moved > config.longPressMoveTolerance) {
           this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
           this.photoHold.elapsed = 0;
-          continue;
+          this.photoHold.lastTick = 0;
+          this.photoHold.uv = uv;
+          break;
         }
         this.photoHold.elapsed += dt;
-        if (this.photoHold.elapsed >= config.longPressSeconds) {
-          this.photoHold = { hand: null, elapsed: 0, origin: null };
+        this.photoHold.uv = uv;
+        break;
+      }
+
+      if (!holding || !holdTip || !holdUv || !object) {
+        if (this.photoHold.contacted) {
+          this.audio.play('clickUp', holdTip ?? undefined);
+        }
+        this.photoHold = {
+          hand: null,
+          elapsed: 0,
+          origin: null,
+          uv: null,
+          contacted: false,
+          lastTick: 0,
+        };
+        this.holdProgressRing.visible = false;
+        this.explorer.setPhotoTouchFeedback(null, 0, false);
+      } else {
+        const progress = Math.min(1, this.photoHold.elapsed / config.longPressSeconds);
+        if (!this.photoHold.contacted) {
+          this.photoHold.contacted = true;
+          this.audio.play('click', holdTip);
+        }
+        // Soft ticks while charging (keyboard-like confirmation cadence).
+        if (progress > 0.15 && progress < 1) {
+          const bucket = Math.floor(progress * 5);
+          if (bucket !== this.photoHold.lastTick) {
+            this.photoHold.lastTick = bucket;
+            this.audio.play('tick', holdTip);
+          }
+        }
+        this.explorer.setPhotoTouchFeedback(holdUv, progress, true);
+        if (progress >= 1) {
+          const tip = holdTip;
+          const uv = holdUv;
+          this.photoHold = {
+            hand: null,
+            elapsed: 0,
+            origin: null,
+            uv: null,
+            contacted: false,
+            lastTick: 0,
+          };
           this.holdProgressRing.visible = false;
-          void this.beginConversion(
-            object.id,
-            new Vector3(tip.x, tip.y, tip.z),
-            false,
-            uv,
-          );
+          this.explorer.setPhotoTouchFeedback(null, 0, false);
+          this.audio.play('click', tip);
+          void this.beginConversion(object.id, new Vector3(tip.x, tip.y, tip.z), false, uv);
           return;
         }
-      }
-      if (!holding || !holdTip) {
-        this.photoHold = { hand: null, elapsed: 0, origin: null };
-        this.holdProgressRing.visible = false;
-      } else if (this.photoHold.elapsed > 0.12) {
-        // Progress only after the hold is clearly intentional.
-        const progress = Math.min(1, this.photoHold.elapsed / config.longPressSeconds);
-        this.holdProgressRing.visible = true;
-        this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
-        this.holdProgressRing.scale.setScalar(0.5 + progress * 0.75);
-        (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.55 + progress * 0.4;
-        this.holdProgressRing.lookAt(input.head.position);
-      } else {
-        this.holdProgressRing.visible = false;
+        if (progress > 0.08) {
+          this.holdProgressRing.visible = true;
+          this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
+          this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
+          (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.55 + progress * 0.4;
+          this.holdProgressRing.lookAt(input.head.position);
+        } else {
+          this.holdProgressRing.visible = false;
+        }
       }
       if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
         void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
       return;
     }
-    this.photoHold = { hand: null, elapsed: 0, origin: null };
+    this.photoHold = {
+      hand: null,
+      elapsed: 0,
+      origin: null,
+      uv: null,
+      contacted: false,
+      lastTick: 0,
+    };
     this.holdProgressRing.visible = false;
     this.updateSceneHold(input);
   }
@@ -804,6 +874,7 @@ export class SceneEchoesApp {
 
   private clearHandFeedback(): void {
     this.holdProgressRing.visible = false;
+    this.explorer?.setPhotoTouchFeedback(null, 0, false);
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
   }
@@ -1432,8 +1503,8 @@ function worldToPhotoUv(
   const size = photo.userData.photoSize as { width: number; height: number } | undefined;
   const w = size?.width ?? config.openPhotoWidth;
   const h = size?.height ?? config.openPhotoWidth * 0.75;
-  // Ignore presses that are clearly far in front of / behind the print.
-  if (Math.abs(local.z) > 0.12) return null;
+  // Generous depth so a Quest fingertip still counts while pressing through.
+  if (Math.abs(local.z) > 0.22) return null;
   const u = local.x / w + 0.5;
   const v = 0.5 - local.y / h;
   const pad = edgePad;
