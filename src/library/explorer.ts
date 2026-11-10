@@ -229,9 +229,9 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Within arm reach so index poke works (Quest keyboard-style contact).
-    const distance = 0.62;
-    const centerY = head.y - 0.04;
+    // Arm-reach distance so index poke can hit the print (product-like touch).
+    const distance = 0.55;
+    const centerY = head.y - 0.05;
     mesh.position.set(
       head.x + forward.x * distance,
       centerY,

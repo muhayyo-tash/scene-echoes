@@ -165,7 +165,9 @@ export class SceneEchoesApp {
     uv: { x: number; y: number } | null;
     contacted: boolean;
     lastTick: number;
-  } = { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0 };
+    /** Seconds since last valid contact — absorbs Quest tracking dropouts. */
+    lost: number;
+  } = { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
   private desktopHold: {
     x: number;
     y: number;
@@ -228,24 +230,12 @@ export class SceneEchoesApp {
       this.explorer.setMovieProgress(filmId, this.films.get(filmId));
     }
     this.films.subscribe((id, progress) => this.explorer.setMovieProgress(id, progress));
-    // Warm the 24MB sofa (and any other photo objects) so convert is a clone, not a hitch.
-    void this.preloadObject3dModels();
+    // No model preload — a real product only loads after the user picks something.
     if (debugParams.openId) {
       this.space = openExplorer(this.space);
     }
     if (debugParams.objectId) {
       await this.spawnDebugObject(debugParams.objectId);
-    }
-  }
-
-  private async preloadObject3dModels(): Promise<void> {
-    for (const object of this.objects) {
-      if (object.scene !== 'object3d' || !object.model) continue;
-      try {
-        await loadModel(object);
-      } catch (error) {
-        console.warn('[scene-echoes] preload model failed', object.id, error);
-      }
     }
   }
 
@@ -650,8 +640,8 @@ export class SceneEchoesApp {
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
       photo.updateWorldMatrix(true, true);
-      // Index poke long-press (Meta touch: contact → hold → action). Prefer the
-      // hand already pressing so the other fingertip cannot reset the timer.
+      // Meta-style poke long-press: thick surface hit + sticky hand + grace for
+      // Quest tracking dropouts. Preload is intentionally not used.
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
       let holdUv: { x: number; y: number } | null = null;
@@ -660,24 +650,24 @@ export class SceneEchoesApp {
           ? [this.hands.right, this.hands.left]
           : [this.hands.left, this.hands.right];
       for (const hand of hands) {
+        if (!object) break;
+        if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
         const tip = hand.indexTip;
-        if (!tip || !object) continue;
-        // Direct poke first; if the tip is near the print, also accept the
-        // hand target-ray hit (Meta near-field assist when depth jitters).
-        let uv = worldToPhotoUv(tip, photo, 0.1);
-        if (!uv) {
+        if (!tip) continue;
+        let uv = photoPokeUv(tip, photo);
+        if (!uv && hand.rayOrigin && hand.rayDirection) {
           const tipDist = photo.position.distanceTo(tip as never);
-          if (tipDist < 0.4 && hand.rayOrigin && hand.rayDirection) {
+          if (tipDist < 0.55) {
             this.uiOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
             this.uiDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
+            this.uiRaycaster.far = 1.2;
             this.uiRaycaster.set(this.uiOrigin, this.uiDir);
             const hit = this.uiRaycaster.intersectObject(photo, false)[0];
             if (hit?.uv) uv = { x: hit.uv.x, y: 1 - hit.uv.y };
-            else if (hit) uv = worldToPhotoUv(hit.point, photo, 0.12);
+            else if (hit) uv = photoPokeUv(hit.point, photo);
           }
         }
         if (!uv) continue;
-        if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
         holding = true;
         holdTip = tip;
         holdUv = uv;
@@ -689,34 +679,31 @@ export class SceneEchoesApp {
             uv,
             contacted: false,
             lastTick: 0,
+            lost: 0,
           };
         }
-        const origin = this.photoHold.origin!;
-        const moved = Math.hypot(tip.x - origin.x, tip.y - origin.y, tip.z - origin.z);
-        if (moved > config.longPressMoveTolerance) {
-          this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
-          this.photoHold.elapsed = 0;
-          this.photoHold.lastTick = 0;
-          this.photoHold.uv = uv;
-          break;
-        }
-        this.photoHold.elapsed += dt;
+        this.photoHold.lost = 0;
         this.photoHold.uv = uv;
+        this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
+        this.photoHold.elapsed += dt;
         break;
+      }
+
+      // Keep charging through brief tracking gaps (common on Quest hands).
+      if (!holding && this.photoHold.contacted && this.photoHold.uv && this.photoHold.origin) {
+        this.photoHold.lost += dt;
+        if (this.photoHold.lost < 0.3) {
+          holding = true;
+          holdTip = this.photoHold.origin;
+          holdUv = this.photoHold.uv;
+        }
       }
 
       if (!holding || !holdTip || !holdUv || !object) {
         if (this.photoHold.contacted) {
-          this.audio.play('clickUp', holdTip ?? undefined);
+          this.audio.play('clickUp', this.photoHold.origin ?? undefined);
         }
-        this.photoHold = {
-          hand: null,
-          elapsed: 0,
-          origin: null,
-          uv: null,
-          contacted: false,
-          lastTick: 0,
-        };
+        this.photoHold = emptyPhotoHold();
         this.holdProgressRing.visible = false;
         this.explorer.setPhotoTouchFeedback(null, 0, false);
       } else {
@@ -725,8 +712,7 @@ export class SceneEchoesApp {
           this.photoHold.contacted = true;
           this.audio.play('click', holdTip);
         }
-        // Soft ticks while charging (keyboard-like confirmation cadence).
-        if (progress > 0.15 && progress < 1) {
+        if (progress > 0.12 && progress < 1) {
           const bucket = Math.floor(progress * 5);
           if (bucket !== this.photoHold.lastTick) {
             this.photoHold.lastTick = bucket;
@@ -737,21 +723,15 @@ export class SceneEchoesApp {
         if (progress >= 1) {
           const tip = holdTip;
           const uv = holdUv;
-          this.photoHold = {
-            hand: null,
-            elapsed: 0,
-            origin: null,
-            uv: null,
-            contacted: false,
-            lastTick: 0,
-          };
+          this.photoHold = emptyPhotoHold();
           this.holdProgressRing.visible = false;
           this.explorer.setPhotoTouchFeedback(null, 0, false);
           this.audio.play('click', tip);
+          // Load starts only now — on demand after the user commits the poke.
           void this.beginConversion(object.id, new Vector3(tip.x, tip.y, tip.z), false, uv);
           return;
         }
-        if (progress > 0.08) {
+        if (progress > 0.06) {
           this.holdProgressRing.visible = true;
           this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
           this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
@@ -766,14 +746,7 @@ export class SceneEchoesApp {
       }
       return;
     }
-    this.photoHold = {
-      hand: null,
-      elapsed: 0,
-      origin: null,
-      uv: null,
-      contacted: false,
-      lastTick: 0,
-    };
+    this.photoHold = emptyPhotoHold();
     this.holdProgressRing.visible = false;
     this.updateSceneHold(input);
   }
@@ -1494,17 +1467,41 @@ function handHorizontalYaw(
   return Math.atan2(pinch.x - objectPos.x, pinch.z - objectPos.z);
 }
 
+function emptyPhotoHold(): {
+  hand: 'left' | 'right' | null;
+  elapsed: number;
+  origin: { x: number; y: number; z: number } | null;
+  uv: { x: number; y: number } | null;
+  contacted: boolean;
+  lastTick: number;
+  lost: number;
+} {
+  return { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
+}
+
+/**
+ * Thick poke volume on the open print. Plane +Z faces the wearer; allow a
+ * deep approach from the front and a short press-through behind the surface.
+ */
+function photoPokeUv(
+  point: { x: number; y: number; z: number },
+  photo: Mesh,
+): { x: number; y: number } | null {
+  return worldToPhotoUv(point, photo, 0.14, 0.18, 0.1);
+}
+
 function worldToPhotoUv(
   point: { x: number; y: number; z: number },
   photo: Mesh,
   edgePad = 0,
+  frontDepth = 0.22,
+  backDepth = 0.12,
 ): { x: number; y: number } | null {
   const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
   const size = photo.userData.photoSize as { width: number; height: number } | undefined;
   const w = size?.width ?? config.openPhotoWidth;
   const h = size?.height ?? config.openPhotoWidth * 0.75;
-  // Generous depth so a Quest fingertip still counts while pressing through.
-  if (Math.abs(local.z) > 0.22) return null;
+  if (local.z > frontDepth || local.z < -backDepth) return null;
   const u = local.x / w + 0.5;
   const v = 0.5 - local.y / h;
   const pad = edgePad;
