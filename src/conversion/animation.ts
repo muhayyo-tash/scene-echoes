@@ -64,16 +64,20 @@ export class ConversionAnimation {
     this.model = model;
     this.model.visible = false;
     this.group.add(model);
-    try {
-      const edges = new EdgesGeometry(geometryOf(model), 25);
-      this.wire = new LineSegments(
-        edges,
-        new LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0 }),
-      );
-      this.group.add(this.wire);
-    } catch {
+    // Lightweight placeholder wire only — EdgesGeometry on a dense sofa GLB
+    // freezes the Quest main thread for several seconds and looks like blue shards.
+    if (this.wire) {
+      this.group.remove(this.wire);
+      this.wire.geometry.dispose();
+      (this.wire.material as LineBasicMaterial).dispose();
       this.wire = null;
     }
+    const stub = new EdgesGeometry(new PlaneGeometry(0.28, 0.22), 1);
+    this.wire = new LineSegments(
+      stub,
+      new LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0 }),
+    );
+    this.group.add(this.wire);
     this.reveal = new ShaderMaterial({
       uniforms: {
         uReveal: { value: 0 },
@@ -126,16 +130,13 @@ export class ConversionAnimation {
 
   finish(): Group | null {
     this.group.visible = false;
+    if (this.wire) {
+      this.group.remove(this.wire);
+      this.wire.geometry.dispose();
+      (this.wire.material as LineBasicMaterial).dispose();
+      this.wire = null;
+    }
     if (this.model) this.group.remove(this.model);
     return this.model;
   }
-}
-
-function geometryOf(model: Group): BufferGeometry {
-  let found: BufferGeometry | null = null;
-  model.traverse((child) => {
-    const mesh = child as Mesh;
-    if (!found && mesh.isMesh) found = mesh.geometry;
-  });
-  return found ?? new PlaneGeometry(0.2, 0.2);
 }

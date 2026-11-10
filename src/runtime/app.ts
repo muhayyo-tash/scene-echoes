@@ -238,11 +238,24 @@ export class SceneEchoesApp {
       this.explorer.setMovieProgress(filmId, this.films.get(filmId));
     }
     this.films.subscribe((id, progress) => this.explorer.setMovieProgress(id, progress));
+    // Warm the 24MB sofa (and any other photo objects) so convert is a clone, not a hitch.
+    void this.preloadObject3dModels();
     if (debugParams.openId) {
       this.space = openExplorer(this.space);
     }
     if (debugParams.objectId) {
       await this.spawnDebugObject(debugParams.objectId);
+    }
+  }
+
+  private async preloadObject3dModels(): Promise<void> {
+    for (const object of this.objects) {
+      if (object.scene !== 'object3d' || !object.model) continue;
+      try {
+        await loadModel(object);
+      } catch (error) {
+        console.warn('[scene-echoes] preload model failed', object.id, error);
+      }
     }
   }
 
@@ -641,21 +654,17 @@ export class SceneEchoesApp {
       this.conversion.update(progress);
       if (progress >= 1) {
         const { object, model } = this.pendingConverted;
+        this.pendingConverted = null;
         const finished = this.conversion.finish() ?? model;
         const spawn = this.spawnPoint(input);
-        this.placeConverted(object, finished, spawn);
-        this.audio.play('chime', spawn);
-        this.converting = false;
-        this.pendingConverted = null;
-        if (this.space.photoOpen) {
-          this.explorer.closePhoto();
-          this.space = closePhoto(this.space);
-        }
+        this.clearHandFeedback();
+        // Place (jelly shader patch) on the next frame so the reveal can finish cleanly.
+        void this.finishConversionPlace(object, finished, spawn);
       }
       return;
     }
     if (this.converting) {
-      this.holdProgressRing.visible = false;
+      this.clearHandFeedback();
       this.conversion.update(0.18 + (Math.sin(this.time * 2.4) * 0.5 + 0.5) * 0.25);
       return;
     }
@@ -849,12 +858,16 @@ export class SceneEchoesApp {
     const already = this.converting;
     this.converting = true;
     this.space.space = 'converting';
+    this.clearHandFeedback();
     if (!already) {
       this.conversion.start(origin, column);
       this.audio.play('whoosh', origin);
     }
     try {
+      // Let one frame paint the conversion FX before any GLB work.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const handle = await this.modelSource.request(id, point);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const model = handle.root as Group;
       this.conversion.attachModel(model);
       this.conversionElapsed = 0;
@@ -866,6 +879,28 @@ export class SceneEchoesApp {
       this.pendingConverted = null;
       this.space.space = this.space.photoOpen ? 'photo' : this.space.explorerOpen ? 'explorer' : 'clean';
       this.audio.play('thud', origin);
+    }
+  }
+
+  private clearHandFeedback(): void {
+    this.holdProgressRing.visible = false;
+    this.grabHoverRing.visible = false;
+    this.ghost.visible = false;
+    this.ghost.userData.anim = undefined;
+  }
+
+  private async finishConversionPlace(
+    object: ManifestObject,
+    model: Group,
+    spawn: Vector3,
+  ): Promise<void> {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    this.placeConverted(object, model, spawn);
+    this.audio.play('chime', spawn);
+    this.converting = false;
+    if (this.space.photoOpen) {
+      this.explorer.closePhoto();
+      this.space = closePhoto(this.space);
     }
   }
 
