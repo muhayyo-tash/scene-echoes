@@ -103,14 +103,14 @@ export class FileExplorer {
     this.applyFolder();
   }
 
-  private readonly dockOffset = new Vector3(0.36, 0.22, -0.7);
+  private readonly dockOffset = new Vector3(0.34, 0.2, -0.65);
   private readonly dockQuat = new Quaternion();
   private readonly dockPos = new Vector3();
 
   /**
-   * View-locked dock: every frame, place the icon at a fixed offset in the
-   * wearer's view (top-right). Must stay in the scene graph — parenting to
-   * `world.camera` is invisible in WebXR because XR renders via a different camera.
+   * View-locked dock: offset in head space each frame, then lookAt the eyes
+   * (same facing as the previously-visible dock — do not rotateY(PI) or the
+   * plane faces away and gets culled).
    */
   placeDockHud(
     head: { x: number; y: number; z: number },
@@ -118,10 +118,11 @@ export class FileExplorer {
   ): void {
     this.dockQuat.set(quat.x, quat.y, quat.z, quat.w);
     this.dockPos.copy(this.dockOffset).applyQuaternion(this.dockQuat);
-    this.iconGroup.position.set(head.x + this.dockPos.x, head.y + this.dockPos.y, head.z + this.dockPos.z);
-    // Match head orientation, then face the wearer (plane default faces +Z).
-    this.iconGroup.quaternion.copy(this.dockQuat);
-    this.iconGroup.rotateY(Math.PI);
+    const x = head.x + this.dockPos.x;
+    const y = head.y + this.dockPos.y;
+    const z = head.z + this.dockPos.z;
+    this.iconGroup.position.set(x, y, z);
+    this.iconGroup.lookAt(head.x, head.y, head.z);
     this.iconGroup.visible = true;
   }
 
@@ -407,6 +408,7 @@ export class FileExplorer {
       transparent: true,
       depthTest: false,
       depthWrite: false,
+      side: DoubleSide,
     });
     const mesh = new Mesh(new PlaneGeometry(DOCK_SIZE, DOCK_SIZE), iconMat);
     mesh.userData.appIcon = true;
