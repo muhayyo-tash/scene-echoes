@@ -103,7 +103,8 @@ export class FileExplorer {
     this.applyFolder();
   }
 
-  private readonly dockOffset = new Vector3(0.34, 0.2, -0.65);
+  // View-space: +X right, +Y up, -Z forward. Keep inside Quest FOV.
+  private readonly dockOffset = new Vector3(0.2, 0.1, -0.58);
   private readonly dockQuat = new Quaternion();
   private readonly dockPos = new Vector3();
 
