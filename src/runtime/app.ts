@@ -208,9 +208,7 @@ export class SceneEchoesApp {
     this.timeline = { moments: parseTimelineMoments(bundledTimeline) };
     this.explorer = new FileExplorer(this.entries, this.objects);
     await this.explorer.init();
-    this.scene.add(this.explorer.group, this.explorer.photoGroup);
-    // Dock lives on the camera (screen-space HUD), not in the room.
-    this.explorer.attachDockHud(this.camera);
+    this.scene.add(this.explorer.group, this.explorer.photoGroup, this.explorer.iconGroup);
     this.modelSource = createModelSource(this.objects, (object) => loadModel(object));
     this.films = createFilmProcessing(
       this.storage,
@@ -280,7 +278,6 @@ export class SceneEchoesApp {
       source: 'default',
     });
     this.surfaces.usedDefault = true;
-    this.explorer.attachDockHud(camera);
     this.desktopControls = new OrbitControls(camera, canvas);
     this.desktopControls.target.set(-0.15, 1.1, -0.15);
     this.desktopControls.enableDamping = true;
@@ -484,8 +481,15 @@ export class SceneEchoesApp {
   }
 
   private updateExplorer(dt: number, input: FrameInput): void {
-    // Keep the dock glued to the headset camera every frame.
-    this.explorer.attachDockHud(this.camera);
+    // View-locked top-right dock (world pose follows head each frame).
+    this.explorer.placeDockHud(
+      {
+        x: input.head.position.x,
+        y: input.head.position.y,
+        z: input.head.position.z,
+      },
+      input.head.quaternion,
+    );
     let hover: string | null = null;
     const tips = [
       this.hands.left.indexTip,

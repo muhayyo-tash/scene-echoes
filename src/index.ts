@@ -7,7 +7,7 @@ import {
   XRPlane,
 } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { SceneEchoesApp } from './runtime/app.js';
 import { samplesFromFrame } from './runtime/xr-hands.js';
 import type { RoomSurface } from './core/surfaces.js';
@@ -56,7 +56,9 @@ class SceneEchoesSystem extends createSystem({
       });
     }
     const head = new Vector3();
+    const headQuat = new Quaternion();
     world.camera.getWorldPosition(head);
+    world.camera.getWorldQuaternion(headQuat);
     this.app.update(delta, {
       left: samples.left,
       right: samples.right,
@@ -64,10 +66,10 @@ class SceneEchoesSystem extends createSystem({
       head: {
         position: head,
         quaternion: {
-          x: world.camera.quaternion.x,
-          y: world.camera.quaternion.y,
-          z: world.camera.quaternion.z,
-          w: world.camera.quaternion.w,
+          x: headQuat.x,
+          y: headQuat.y,
+          z: headQuat.z,
+          w: headQuat.w,
         },
       },
       paused,

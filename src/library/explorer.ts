@@ -6,9 +6,9 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Quaternion,
   Texture,
   Vector3,
-  type Object3D,
 } from 'three';
 import type { ExplorerEntry, ManifestObject } from '../assets/types.js';
 import {
@@ -103,25 +103,25 @@ export class FileExplorer {
     this.applyFolder();
   }
 
-  /**
-   * True HUD dock: parented to the headset camera so it stays glued to the
-   * top-right of the view — no world-space sliding when you turn.
-   */
-  attachDockHud(camera: Object3D): void {
-    if (this.iconGroup.parent !== camera) {
-      camera.add(this.iconGroup);
-    }
-    // Camera local space: +X right, +Y up, -Z forward — pinned top-right.
-    this.iconGroup.position.set(0.38, 0.24, -0.72);
-    // PlaneGeometry faces +Z; flip so the icon faces the wearer.
-    this.iconGroup.rotation.set(0, Math.PI, 0);
-    this.iconGroup.visible = true;
-  }
+  private readonly dockOffset = new Vector3(0.36, 0.22, -0.7);
+  private readonly dockQuat = new Quaternion();
+  private readonly dockPos = new Vector3();
 
-  /** @deprecated Prefer attachDockHud — kept for desktop boot fallback. */
-  placeDock(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
-    void head;
-    void forward;
+  /**
+   * View-locked dock: every frame, place the icon at a fixed offset in the
+   * wearer's view (top-right). Must stay in the scene graph — parenting to
+   * `world.camera` is invisible in WebXR because XR renders via a different camera.
+   */
+  placeDockHud(
+    head: { x: number; y: number; z: number },
+    quat: { x: number; y: number; z: number; w: number },
+  ): void {
+    this.dockQuat.set(quat.x, quat.y, quat.z, quat.w);
+    this.dockPos.copy(this.dockOffset).applyQuaternion(this.dockQuat);
+    this.iconGroup.position.set(head.x + this.dockPos.x, head.y + this.dockPos.y, head.z + this.dockPos.z);
+    // Match head orientation, then face the wearer (plane default faces +Z).
+    this.iconGroup.quaternion.copy(this.dockQuat);
+    this.iconGroup.rotateY(Math.PI);
     this.iconGroup.visible = true;
   }
 
@@ -402,23 +402,40 @@ export class FileExplorer {
 
   private buildDockIcon(): void {
     const texture = new CanvasTexture(canvasTextureSource(drawFinderAppIcon, 256, 256));
-    const mesh = new Mesh(
-      new PlaneGeometry(DOCK_SIZE, DOCK_SIZE),
-      new MeshBasicMaterial({ map: texture, transparent: true }),
-    );
+    const iconMat = new MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const mesh = new Mesh(new PlaneGeometry(DOCK_SIZE, DOCK_SIZE), iconMat);
     mesh.userData.appIcon = true;
+    mesh.renderOrder = 1000;
     const hit = new Mesh(
       new PlaneGeometry(DOCK_SIZE * 1.35, DOCK_SIZE * 1.55),
-      new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+      new MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthTest: false,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
     );
     hit.position.z = -0.002;
     hit.userData.appIcon = true;
+    hit.renderOrder = 1000;
     const caption = new Mesh(
       new PlaneGeometry(0.16, 0.03),
-      new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas('Finder', true)), transparent: true }),
+      new MeshBasicMaterial({
+        map: new CanvasTexture(makeLabelCanvas('Finder', true)),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
     );
     caption.position.y = -DOCK_SIZE * 0.72;
     caption.userData.appIcon = true;
+    caption.renderOrder = 1000;
     this.iconGroup.add(hit, mesh, caption);
   }
 
