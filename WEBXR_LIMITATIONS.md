@@ -108,3 +108,11 @@ while the GLB fetches; the old “preload everything object3d” path was remove
 
 Quest hand tracking also drops index-tip frames during a press. Without a short
 contact grace period, the hold timer reset forever and nothing ever popped.
+
+## Blue rectangles were our conversion FX, not passthrough
+
+While a GLB loaded, the old conversion animation entered its “build” phase and
+drew cyan `EdgesGeometry` stubs, scan bars, particles, and scene-capture
+**column** planes. `finish()` did not always remove those columns, so blue
+rectangles lingered in the room. Conversion wait UX is now a soft white ring
+only; no cyan wireframes.

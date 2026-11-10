@@ -630,7 +630,8 @@ export class SceneEchoesApp {
     }
     if (this.converting) {
       this.clearHandFeedback();
-      this.conversion.update(0.18 + (Math.sin(this.time * 2.4) * 0.5 + 0.5) * 0.25);
+      // Stay in the soft "waiting" band — never the old blue build wire phase.
+      this.conversion.update(0.06 + (Math.sin(this.time * 2.2) * 0.5 + 0.5) * 0.1);
       return;
     }
     if (this.space.photoOpen && this.explorer.openPhoto) {
@@ -639,9 +640,7 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      photo.updateWorldMatrix(true, true);
-      // Meta-style poke long-press: thick surface hit + sticky hand + grace for
-      // Quest tracking dropouts. Preload is intentionally not used.
+      // Broad distance hit (Finder-icon style) — thin plane tests failed on Quest.
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
       let holdUv: { x: number; y: number } | null = null;
@@ -652,21 +651,9 @@ export class SceneEchoesApp {
       for (const hand of hands) {
         if (!object) break;
         if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
-        const tip = hand.indexTip;
+        const tip = hand.indexTip ?? hand.pinchPosition;
         if (!tip) continue;
-        let uv = photoPokeUv(tip, photo);
-        if (!uv && hand.rayOrigin && hand.rayDirection) {
-          const tipDist = photo.position.distanceTo(tip as never);
-          if (tipDist < 0.55) {
-            this.uiOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
-            this.uiDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
-            this.uiRaycaster.far = 1.2;
-            this.uiRaycaster.set(this.uiOrigin, this.uiDir);
-            const hit = this.uiRaycaster.intersectObject(photo, false)[0];
-            if (hit?.uv) uv = { x: hit.uv.x, y: 1 - hit.uv.y };
-            else if (hit) uv = photoPokeUv(hit.point, photo);
-          }
-        }
+        const uv = this.explorer.hitOpenPhoto(tip, 0.2);
         if (!uv) continue;
         holding = true;
         holdTip = tip;
@@ -689,10 +676,9 @@ export class SceneEchoesApp {
         break;
       }
 
-      // Keep charging through brief tracking gaps (common on Quest hands).
       if (!holding && this.photoHold.contacted && this.photoHold.uv && this.photoHold.origin) {
         this.photoHold.lost += dt;
-        if (this.photoHold.lost < 0.3) {
+        if (this.photoHold.lost < 0.35) {
           holding = true;
           holdTip = this.photoHold.origin;
           holdUv = this.photoHold.uv;
@@ -727,11 +713,10 @@ export class SceneEchoesApp {
           this.holdProgressRing.visible = false;
           this.explorer.setPhotoTouchFeedback(null, 0, false);
           this.audio.play('click', tip);
-          // Load starts only now — on demand after the user commits the poke.
           void this.beginConversion(object.id, new Vector3(tip.x, tip.y, tip.z), false, uv);
           return;
         }
-        if (progress > 0.06) {
+        if (progress > 0.05) {
           this.holdProgressRing.visible = true;
           this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
           this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
@@ -1479,29 +1464,16 @@ function emptyPhotoHold(): {
   return { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
 }
 
-/**
- * Thick poke volume on the open print. Plane +Z faces the wearer; allow a
- * deep approach from the front and a short press-through behind the surface.
- */
-function photoPokeUv(
-  point: { x: number; y: number; z: number },
-  photo: Mesh,
-): { x: number; y: number } | null {
-  return worldToPhotoUv(point, photo, 0.14, 0.18, 0.1);
-}
-
 function worldToPhotoUv(
   point: { x: number; y: number; z: number },
   photo: Mesh,
   edgePad = 0,
-  frontDepth = 0.22,
-  backDepth = 0.12,
 ): { x: number; y: number } | null {
   const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
   const size = photo.userData.photoSize as { width: number; height: number } | undefined;
   const w = size?.width ?? config.openPhotoWidth;
   const h = size?.height ?? config.openPhotoWidth * 0.75;
-  if (local.z > frontDepth || local.z < -backDepth) return null;
+  if (local.z > 0.45 || local.z < -0.2) return null;
   const u = local.x / w + 0.5;
   const v = 0.5 - local.y / h;
   const pad = edgePad;

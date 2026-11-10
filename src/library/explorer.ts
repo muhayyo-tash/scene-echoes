@@ -229,9 +229,9 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Arm-reach distance so index poke can hit the print (product-like touch).
-    const distance = 0.55;
-    const centerY = head.y - 0.05;
+    // Close enough for a natural index poke (~forearm reach).
+    const distance = 0.48;
+    const centerY = head.y - 0.06;
     mesh.position.set(
       head.x + forward.x * distance,
       centerY,
@@ -275,7 +275,7 @@ export class FileExplorer {
     this.pokeProgress = new Mesh(
       new PlaneGeometry(0.09, 0.09),
       new MeshBasicMaterial({
-        color: new Color('#5ac8fa'),
+        color: new Color('#f4f6f2'),
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -341,6 +341,29 @@ export class FileExplorer {
     this.dimOthers(null, false);
     this.group.visible = this.visible;
     this.iconGroup.visible = true;
+  }
+
+  /**
+   * Broad near-field hit on the open print — same idea as hitIcon (distance),
+   * not a razor-thin plane test. Returns a UV estimate for conversion.
+   */
+  hitOpenPhoto(
+    point: { x: number; y: number; z: number },
+    pad = 0.16,
+  ): { x: number; y: number } | null {
+    const photo = this.openPhoto;
+    if (!photo || !this.photoGroup.visible) return null;
+    photo.updateWorldMatrix(true, true);
+    const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
+    const size = photo.userData.photoSize as { width: number; height: number } | undefined;
+    const w = size?.width ?? config.openPhotoWidth;
+    const h = size?.height ?? config.openPhotoWidth * 0.75;
+    // Thick slab in front of / through the print so Quest fingertips register.
+    if (local.z > 0.45 || local.z < -0.2) return null;
+    const u = local.x / w + 0.5;
+    const v = 0.5 - local.y / h;
+    if (u < -pad || u > 1 + pad || v < -pad || v > 1 + pad) return null;
+    return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
   }
 
   hitIcon(point: { x: number; y: number; z: number }, radius = 0.08): boolean {
