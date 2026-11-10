@@ -63,7 +63,7 @@ import {
 import { spawnInFront } from '../core/placement.js';
 import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
-import { createGhostHand, playGhostSlide } from '../core/ghost-hand.js';
+import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
 import { SceneCapture } from '../core/scene-capture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
@@ -115,6 +115,26 @@ export class SceneEchoesApp {
   landingRing = new Mesh(
     new RingGeometry(0.08, 0.09, 32),
     new MeshBasicMaterial({ color: new Color('#dff6e8'), transparent: true, opacity: 0.4 }),
+  );
+  /** Soft ring when a hand can grab a placed 3D object. */
+  private grabHoverRing = new Mesh(
+    new RingGeometry(0.11, 0.13, 40),
+    new MeshBasicMaterial({
+      color: new Color('#9fd6ff'),
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+    }),
+  );
+  /** Fills in as the user pinch-holds on an open photo. */
+  private holdProgressRing = new Mesh(
+    new RingGeometry(0.035, 0.048, 40),
+    new MeshBasicMaterial({
+      color: new Color('#ffffff'),
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    }),
   );
   debug = mountDebugPanel();
   idle = 0;
@@ -177,11 +197,16 @@ export class SceneEchoesApp {
     createFallbackLights(this.scene);
     this.landingRing.rotation.x = -Math.PI / 2;
     this.landingRing.visible = false;
+    this.grabHoverRing.rotation.x = -Math.PI / 2;
+    this.grabHoverRing.visible = false;
+    this.holdProgressRing.visible = false;
     this.scene.add(
       this.placed,
       this.conversion.group,
       this.ghost,
       this.landingRing,
+      this.grabHoverRing,
+      this.holdProgressRing,
       this.screen.group,
     );
     this.movie = new MovieScene([]);
@@ -341,6 +366,7 @@ export class SceneEchoesApp {
     this.updateExplorer(dt, input);
     this.updateConversion(dt, input);
     this.updateGrab(dt, input);
+    this.updateGrabHover();
     this.updatePlacedObjects(dt, input);
     this.updateBookHold(input);
     this.updateMovie(dt, input);
@@ -393,11 +419,26 @@ export class SceneEchoesApp {
       playGhostSlide(this.ghost, 0);
       this.ghost.userData.anim = { kind: 'slide', t: 0 };
     }
-    const anim = this.ghost.userData.anim as { kind: string; t: number } | undefined;
+    const anim = this.ghost.userData.anim as
+      | { kind: string; t: number; target?: { x: number; y: number; z: number } }
+      | undefined;
     if (anim) {
       anim.t += dt / config.ghostHintSeconds;
       if (anim.kind === 'slide') playGhostSlide(this.ghost, anim.t);
+      if (anim.kind === 'pinch') {
+        const target =
+          anim.target ??
+          (this.explorer.openPhoto
+            ? {
+                x: this.explorer.openPhoto.position.x,
+                y: this.explorer.openPhoto.position.y,
+                z: this.explorer.openPhoto.position.z,
+              }
+            : null);
+        if (target) playGhostPinchHold(this.ghost, anim.t, target);
+      }
       if (anim.t >= 1) {
+        if (anim.kind === 'pinch') this.hintPlayed.pinch = true;
         this.ghost.visible = false;
         this.ghost.userData.anim = undefined;
       }
@@ -578,9 +619,19 @@ export class SceneEchoesApp {
       y: input.head.position.y - config.chestOffset,
       z: input.head.position.z,
     }, forward);
-    this.hintPlayed.pinch = true;
-    this.ghost.visible = false;
-    this.ghost.userData.anim = undefined;
+    // Once per session: ghost pinch-hold on the print so users see the convert gesture.
+    if (!this.hintPlayed.pinch && this.explorer.openPhoto) {
+      const target = {
+        x: this.explorer.openPhoto.position.x,
+        y: this.explorer.openPhoto.position.y,
+        z: this.explorer.openPhoto.position.z,
+      };
+      playGhostPinchHold(this.ghost, 0, target);
+      this.ghost.userData.anim = { kind: 'pinch', t: 0, target };
+    } else {
+      this.ghost.visible = false;
+      this.ghost.userData.anim = undefined;
+    }
   }
 
   private updateConversion(dt: number, input: FrameInput): void {
@@ -604,6 +655,7 @@ export class SceneEchoesApp {
       return;
     }
     if (this.converting) {
+      this.holdProgressRing.visible = false;
       this.conversion.update(0.18 + (Math.sin(this.time * 2.4) * 0.5 + 0.5) * 0.25);
       return;
     }
@@ -615,12 +667,20 @@ export class SceneEchoesApp {
         this.objects.find((item) => item.scene === 'object3d');
       photo.updateWorldMatrix(true, true);
       let holding = false;
+      let holdTip: { x: number; y: number; z: number } | null = null;
       for (const hand of [this.hands.left, this.hands.right]) {
         const tip = hand.pinchPosition ?? (hand.pinched ? hand.indexTip : null);
         if (!hand.pinched || !tip || !object) continue;
         const uv = worldToPhotoUv(tip, photo, 0.04);
         if (!uv) continue;
         holding = true;
+        holdTip = tip;
+        // User started the real gesture — stop the teaching ghost.
+        if (this.ghost.userData.anim?.kind === 'pinch') {
+          this.hintPlayed.pinch = true;
+          this.ghost.visible = false;
+          this.ghost.userData.anim = undefined;
+        }
         if (this.photoHold.hand !== hand.handedness || !this.photoHold.origin) {
           this.photoHold = {
             hand: hand.handedness,
@@ -639,6 +699,7 @@ export class SceneEchoesApp {
         this.photoHold.elapsed += dt;
         if (this.photoHold.elapsed >= config.longPressSeconds || hand.longPress.fired) {
           this.photoHold = { hand: null, elapsed: 0, origin: null };
+          this.holdProgressRing.visible = false;
           hand.longPress.fired = false;
           void this.beginConversion(
             object.id,
@@ -649,14 +710,73 @@ export class SceneEchoesApp {
           return;
         }
       }
-      if (!holding) this.photoHold = { hand: null, elapsed: 0, origin: null };
+      if (!holding) {
+        this.photoHold = { hand: null, elapsed: 0, origin: null };
+        this.holdProgressRing.visible = false;
+        // Soft “you can convert here” cue when a fingertip rests on the print.
+        for (const hand of [this.hands.left, this.hands.right]) {
+          const tip = hand.indexTip ?? hand.pinchPosition;
+          if (!tip) continue;
+          if (!worldToPhotoUv(tip, photo, 0.04)) continue;
+          this.holdProgressRing.visible = true;
+          this.holdProgressRing.position.set(tip.x, tip.y, tip.z);
+          this.holdProgressRing.scale.setScalar(0.55);
+          (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.35;
+          this.holdProgressRing.lookAt(input.head.position);
+          break;
+        }
+      } else if (holdTip) {
+        const progress = Math.min(1, this.photoHold.elapsed / config.longPressSeconds);
+        this.holdProgressRing.visible = true;
+        this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
+        this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
+        (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.45 + progress * 0.45;
+        this.holdProgressRing.lookAt(input.head.position);
+      }
       if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
         void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
       return;
     }
     this.photoHold = { hand: null, elapsed: 0, origin: null };
+    this.holdProgressRing.visible = false;
     this.updateSceneHold(input);
+  }
+
+  private updateGrabHover(): void {
+    if (this.grab || this.twoHandScale !== null || this.converting || this.space.photoOpen) {
+      this.grabHoverRing.visible = false;
+      return;
+    }
+    const tips = [
+      this.hands.left.pinchPosition ?? this.hands.left.indexTip,
+      this.hands.right.pinchPosition ?? this.hands.right.indexTip,
+    ];
+    let nearest: PlacedObject | null = null;
+    let best = Infinity;
+    for (const tip of tips) {
+      if (!tip) continue;
+      for (const item of this.placedObjects) {
+        if (!this.canGrabObject(item, tip)) continue;
+        const d = item.root.position.distanceTo(tip as never);
+        if (d < best) {
+          best = d;
+          nearest = item;
+        }
+      }
+    }
+    if (!nearest) {
+      this.grabHoverRing.visible = false;
+      return;
+    }
+    const pulse = 0.92 + Math.sin(this.time * 5) * 0.08;
+    this.grabHoverRing.visible = true;
+    this.grabHoverRing.position.set(
+      nearest.root.position.x,
+      nearest.root.position.y + 0.02,
+      nearest.root.position.z,
+    );
+    this.grabHoverRing.scale.setScalar(pulse * Math.max(0.7, nearest.scale));
   }
 
   private updateSceneHold(input: FrameInput): void {
