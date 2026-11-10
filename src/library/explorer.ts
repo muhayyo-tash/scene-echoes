@@ -8,6 +8,7 @@ import {
   PlaneGeometry,
   Texture,
   Vector3,
+  type Object3D,
 } from 'three';
 import type { ExplorerEntry, ManifestObject } from '../assets/types.js';
 import {
@@ -103,21 +104,25 @@ export class FileExplorer {
   }
 
   /**
-   * Head-locked Finder icon: always top-right of the view, follows looking.
-   * `head` is eye height; call every frame.
+   * True HUD dock: parented to the headset camera so it stays glued to the
+   * top-right of the view — no world-space sliding when you turn.
    */
-  placeDock(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
-    // Stay available so the user can reopen Finder after a photo closes.
+  attachDockHud(camera: Object3D): void {
+    if (this.iconGroup.parent !== camera) {
+      camera.add(this.iconGroup);
+    }
+    // Camera local space: +X right, +Y up, -Z forward — pinned top-right.
+    this.iconGroup.position.set(0.38, 0.24, -0.72);
+    // PlaneGeometry faces +Z; flip so the icon faces the wearer.
+    this.iconGroup.rotation.set(0, Math.PI, 0);
     this.iconGroup.visible = true;
-    const rightX = -forward.z;
-    const rightZ = forward.x;
-    const y = head.y + 0.14;
-    this.iconGroup.position.set(
-      head.x + forward.x * 0.62 + rightX * 0.3,
-      y,
-      head.z + forward.z * 0.62 + rightZ * 0.3,
-    );
-    this.iconGroup.lookAt(head.x, y, head.z);
+  }
+
+  /** @deprecated Prefer attachDockHud — kept for desktop boot fallback. */
+  placeDock(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    void head;
+    void forward;
+    this.iconGroup.visible = true;
   }
 
   setOpen(open: boolean, head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {

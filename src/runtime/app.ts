@@ -208,7 +208,9 @@ export class SceneEchoesApp {
     this.timeline = { moments: parseTimelineMoments(bundledTimeline) };
     this.explorer = new FileExplorer(this.entries, this.objects);
     await this.explorer.init();
-    this.scene.add(this.explorer.group, this.explorer.photoGroup, this.explorer.iconGroup);
+    this.scene.add(this.explorer.group, this.explorer.photoGroup);
+    // Dock lives on the camera (screen-space HUD), not in the room.
+    this.explorer.attachDockHud(this.camera);
     this.modelSource = createModelSource(this.objects, (object) => loadModel(object));
     this.films = createFilmProcessing(
       this.storage,
@@ -278,10 +280,7 @@ export class SceneEchoesApp {
       source: 'default',
     });
     this.surfaces.usedDefault = true;
-    this.explorer.placeDock(
-      { x: 0, y: 1.05, z: 0.4 },
-      { x: 0, z: -1 },
-    );
+    this.explorer.attachDockHud(camera);
     this.desktopControls = new OrbitControls(camera, canvas);
     this.desktopControls.target.set(-0.15, 1.1, -0.15);
     this.desktopControls.enableDamping = true;
@@ -485,16 +484,8 @@ export class SceneEchoesApp {
   }
 
   private updateExplorer(dt: number, input: FrameInput): void {
-    if (!this.desktop) {
-      this.explorer.placeDock(
-        {
-          x: input.head.position.x,
-          y: input.head.position.y,
-          z: input.head.position.z,
-        },
-        forwardFrom(input.head.quaternion),
-      );
-    }
+    // Keep the dock glued to the headset camera every frame.
+    this.explorer.attachDockHud(this.camera);
     let hover: string | null = null;
     const tips = [
       this.hands.left.indexTip,
@@ -1407,10 +1398,12 @@ function placedObjectAt(
 }
 
 function forwardFrom(q: { x: number; y: number; z: number; w: number }): { x: number; z: number } {
+  // Horizontal view direction (camera local -Z), without the old abs(z) clamp that
+  // made HUD/panels slide sideways when turning.
   const x = 2 * (q.x * q.z + q.w * q.y);
-  const z = 1 - 2 * (q.y * q.y + q.z * q.z);
+  const z = -(1 - 2 * (q.x * q.x + q.y * q.y));
   const len = Math.hypot(x, z) || 1;
-  return { x: x / len, z: -Math.abs(z) / len || -1 };
+  return { x: x / len, z: z / len };
 }
 
 /** Horizontal-only facing from the hand — used to yaw objects without pitching. */
