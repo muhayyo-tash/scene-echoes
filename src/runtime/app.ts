@@ -116,23 +116,13 @@ export class SceneEchoesApp {
     new RingGeometry(0.08, 0.09, 32),
     new MeshBasicMaterial({ color: new Color('#dff6e8'), transparent: true, opacity: 0.4 }),
   );
-  /** Soft ring when a hand can grab a placed 3D object. */
-  private grabHoverRing = new Mesh(
-    new RingGeometry(0.11, 0.13, 40),
-    new MeshBasicMaterial({
-      color: new Color('#9fd6ff'),
-      transparent: true,
-      opacity: 0.45,
-      depthWrite: false,
-    }),
-  );
-  /** Fills in as the user pinch-holds on an open photo. */
+  /** Neutral hold progress (only while index long-press is active on a photo). */
   private holdProgressRing = new Mesh(
-    new RingGeometry(0.035, 0.048, 40),
+    new RingGeometry(0.03, 0.042, 40),
     new MeshBasicMaterial({
       color: new Color('#ffffff'),
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
       depthWrite: false,
     }),
   );
@@ -197,15 +187,12 @@ export class SceneEchoesApp {
     createFallbackLights(this.scene);
     this.landingRing.rotation.x = -Math.PI / 2;
     this.landingRing.visible = false;
-    this.grabHoverRing.rotation.x = -Math.PI / 2;
-    this.grabHoverRing.visible = false;
     this.holdProgressRing.visible = false;
     this.scene.add(
       this.placed,
       this.conversion.group,
       this.ghost,
       this.landingRing,
-      this.grabHoverRing,
       this.holdProgressRing,
       this.screen.group,
     );
@@ -379,7 +366,6 @@ export class SceneEchoesApp {
     this.updateExplorer(dt, input);
     this.updateConversion(dt, input);
     this.updateGrab(dt, input);
-    this.updateGrabHover();
     this.updatePlacedObjects(dt, input);
     this.updateBookHold(input);
     this.updateMovie(dt, input);
@@ -409,7 +395,7 @@ export class SceneEchoesApp {
     const forward = forwardFrom(input.head.quaternion);
     this.explorer.setOpen(true, {
       x: input.head.position.x,
-      y: input.head.position.y - config.chestOffset,
+      y: input.head.position.y,
       z: input.head.position.z,
     }, forward);
     if (this.space.movieOpen) this.screen.pauseForExplorer(true);
@@ -503,7 +489,7 @@ export class SceneEchoesApp {
       this.explorer.placeDock(
         {
           x: input.head.position.x,
-          y: input.head.position.y - config.chestOffset,
+          y: input.head.position.y,
           z: input.head.position.z,
         },
         forwardFrom(input.head.quaternion),
@@ -629,22 +615,13 @@ export class SceneEchoesApp {
     const forward = forwardFrom(input.head.quaternion);
     await this.explorer.openPhotoPrint(id, {
       x: input.head.position.x,
-      y: input.head.position.y - config.chestOffset,
+      y: input.head.position.y,
       z: input.head.position.z,
     }, forward);
-    // Once per session: ghost pinch-hold on the print so users see the convert gesture.
-    if (!this.hintPlayed.pinch && this.explorer.openPhoto) {
-      const target = {
-        x: this.explorer.openPhoto.position.x,
-        y: this.explorer.openPhoto.position.y,
-        z: this.explorer.openPhoto.position.z,
-      };
-      playGhostPinchHold(this.ghost, 0, target);
-      this.ghost.userData.anim = { kind: 'pinch', t: 0, target };
-    } else {
-      this.ghost.visible = false;
-      this.ghost.userData.anim = undefined;
-    }
+    // Guidance label on the photo teaches index long-press; no blue ghost overlay.
+    this.hintPlayed.pinch = true;
+    this.ghost.visible = false;
+    this.ghost.userData.anim = undefined;
   }
 
   private updateConversion(dt: number, input: FrameInput): void {
@@ -675,21 +652,16 @@ export class SceneEchoesApp {
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
       photo.updateWorldMatrix(true, true);
+      // Index-finger long-press on the print (pinch not required).
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
       for (const hand of [this.hands.left, this.hands.right]) {
-        const tip = hand.pinchPosition ?? (hand.pinched ? hand.indexTip : null);
-        if (!hand.pinched || !tip || !object) continue;
+        const tip = hand.indexTip;
+        if (!tip || !object) continue;
         const uv = worldToPhotoUv(tip, photo, 0.04);
         if (!uv) continue;
         holding = true;
         holdTip = tip;
-        // User started the real gesture — stop the teaching ghost.
-        if (this.ghost.userData.anim?.kind === 'pinch') {
-          this.hintPlayed.pinch = true;
-          this.ghost.visible = false;
-          this.ghost.userData.anim = undefined;
-        }
         if (this.photoHold.hand !== hand.handedness || !this.photoHold.origin) {
           this.photoHold = {
             hand: hand.handedness,
@@ -699,17 +671,15 @@ export class SceneEchoesApp {
         }
         const origin = this.photoHold.origin!;
         const moved = Math.hypot(tip.x - origin.x, tip.y - origin.y, tip.z - origin.z);
-        // Photo holds allow more wobble than generic long-press (hand tracking noise).
-        if (moved > 0.06) {
+        if (moved > 0.07) {
           this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
           this.photoHold.elapsed = 0;
           continue;
         }
         this.photoHold.elapsed += dt;
-        if (this.photoHold.elapsed >= config.longPressSeconds || hand.longPress.fired) {
+        if (this.photoHold.elapsed >= config.longPressSeconds) {
           this.photoHold = { hand: null, elapsed: 0, origin: null };
           this.holdProgressRing.visible = false;
-          hand.longPress.fired = false;
           void this.beginConversion(
             object.id,
             new Vector3(tip.x, tip.y, tip.z),
@@ -719,28 +689,19 @@ export class SceneEchoesApp {
           return;
         }
       }
-      if (!holding) {
+      if (!holding || !holdTip) {
         this.photoHold = { hand: null, elapsed: 0, origin: null };
         this.holdProgressRing.visible = false;
-        // Soft “you can convert here” cue when a fingertip rests on the print.
-        for (const hand of [this.hands.left, this.hands.right]) {
-          const tip = hand.indexTip ?? hand.pinchPosition;
-          if (!tip) continue;
-          if (!worldToPhotoUv(tip, photo, 0.04)) continue;
-          this.holdProgressRing.visible = true;
-          this.holdProgressRing.position.set(tip.x, tip.y, tip.z);
-          this.holdProgressRing.scale.setScalar(0.55);
-          (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.35;
-          this.holdProgressRing.lookAt(input.head.position);
-          break;
-        }
-      } else if (holdTip) {
+      } else if (this.photoHold.elapsed > 0.12) {
+        // Progress only after the hold is clearly intentional.
         const progress = Math.min(1, this.photoHold.elapsed / config.longPressSeconds);
         this.holdProgressRing.visible = true;
         this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
-        this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
-        (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.45 + progress * 0.45;
+        this.holdProgressRing.scale.setScalar(0.5 + progress * 0.75);
+        (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.55 + progress * 0.4;
         this.holdProgressRing.lookAt(input.head.position);
+      } else {
+        this.holdProgressRing.visible = false;
       }
       if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
         void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
@@ -750,42 +711,6 @@ export class SceneEchoesApp {
     this.photoHold = { hand: null, elapsed: 0, origin: null };
     this.holdProgressRing.visible = false;
     this.updateSceneHold(input);
-  }
-
-  private updateGrabHover(): void {
-    if (this.grab || this.twoHandScale !== null || this.converting || this.space.photoOpen) {
-      this.grabHoverRing.visible = false;
-      return;
-    }
-    const tips = [
-      this.hands.left.pinchPosition ?? this.hands.left.indexTip,
-      this.hands.right.pinchPosition ?? this.hands.right.indexTip,
-    ];
-    let nearest: PlacedObject | null = null;
-    let best = Infinity;
-    for (const tip of tips) {
-      if (!tip) continue;
-      for (const item of this.placedObjects) {
-        if (!this.canGrabObject(item, tip)) continue;
-        const d = item.root.position.distanceTo(tip as never);
-        if (d < best) {
-          best = d;
-          nearest = item;
-        }
-      }
-    }
-    if (!nearest) {
-      this.grabHoverRing.visible = false;
-      return;
-    }
-    const pulse = 0.92 + Math.sin(this.time * 5) * 0.08;
-    this.grabHoverRing.visible = true;
-    this.grabHoverRing.position.set(
-      nearest.root.position.x,
-      nearest.root.position.y + 0.02,
-      nearest.root.position.z,
-    );
-    this.grabHoverRing.scale.setScalar(pulse * Math.max(0.7, nearest.scale));
   }
 
   private updateSceneHold(input: FrameInput): void {
@@ -884,7 +809,6 @@ export class SceneEchoesApp {
 
   private clearHandFeedback(): void {
     this.holdProgressRing.visible = false;
-    this.grabHoverRing.visible = false;
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
   }
@@ -951,18 +875,18 @@ export class SceneEchoesApp {
     if (!this.grab) {
       if (!activeHand?.pinched || !activeHand.pinchPosition) return;
       const p = activeHand.pinchPosition;
-      if (
-        this.space.explorerOpen &&
-        !this.space.photoOpen &&
-        this.explorer.hitMoveHandle(p, 0.14)
-      ) {
-        this.grabOffset.set(
-          this.explorer.group.position.x - p.x,
-          this.explorer.group.position.y - p.y,
-          this.explorer.group.position.z - p.z,
-        );
-        this.grab = { kind: 'explorer', id: 'finder', hand: activeHand.handedness };
-        return;
+      if (this.space.explorerOpen && !this.space.photoOpen) {
+        const ui = this.uiKind(this.uiPick(activeHand)?.object ?? null);
+        const onInteractive = ui?.kind === 'card' || ui?.kind === 'close' || ui?.kind === 'folder';
+        if (!onInteractive && this.explorer.hitMoveHandle(p, 0.2)) {
+          this.grabOffset.set(
+            this.explorer.group.position.x - p.x,
+            this.explorer.group.position.y - p.y,
+            this.explorer.group.position.z - p.z,
+          );
+          this.grab = { kind: 'explorer', id: 'finder', hand: activeHand.handedness };
+          return;
+        }
       }
       const grabbed = this.placedObjects.find((item) => this.canGrabObject(item, p));
       if (grabbed) {
@@ -1010,7 +934,7 @@ export class SceneEchoesApp {
         },
         {
           x: input.head.position.x,
-          y: input.head.position.y - config.chestOffset,
+          y: input.head.position.y,
           z: input.head.position.z,
         },
       );

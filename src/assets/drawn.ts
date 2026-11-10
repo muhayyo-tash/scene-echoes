@@ -63,6 +63,23 @@ export function makeLabelCanvas(text: string, dark = false): HTMLCanvasElement {
   return canvas;
 }
 
+export function makeGuidanceCanvas(text: string): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, 768, 128);
+  ctx.fillStyle = 'rgba(16, 20, 18, 0.72)';
+  roundRect(ctx, 24, 24, 720, 80, 18);
+  ctx.fill();
+  ctx.fillStyle = '#f4f7f5';
+  ctx.font = '32px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 384, 64);
+  return canvas;
+}
+
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,

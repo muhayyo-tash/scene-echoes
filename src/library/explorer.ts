@@ -16,6 +16,7 @@ import {
   drawFinderWindow,
   drawFilmPoster,
   drawSofaPhoto,
+  makeGuidanceCanvas,
   makeLabelCanvas,
   type FinderSection,
 } from '../assets/drawn.js';
@@ -46,8 +47,6 @@ export class FileExplorer {
   visible = false;
   /** True after the user pinches and moves Finder; keeps that placement. */
   userPlaced = false;
-  /** True after the dock icon is placed once in world space (does not follow the head). */
-  dockPlaced = false;
   folder: FinderSection = 'pictures';
   private panel!: Mesh;
   private closeHit!: Mesh;
@@ -103,22 +102,25 @@ export class FileExplorer {
     this.applyFolder();
   }
 
-  placeDock(chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
-    this.iconGroup.visible = !this.photoGroup.visible;
-    // Stay put in the room — do not reattach to the headset every frame.
-    if (this.dockPlaced) return;
+  /**
+   * Head-locked Finder icon: always top-right of the view, follows looking.
+   * `head` is eye height; call every frame.
+   */
+  placeDock(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    // Stay available so the user can reopen Finder after a photo closes.
+    this.iconGroup.visible = true;
     const rightX = -forward.z;
     const rightZ = forward.x;
+    const y = head.y + 0.14;
     this.iconGroup.position.set(
-      chest.x + forward.x * 0.5 + rightX * -0.34,
-      chest.y + 0.08,
-      chest.z + forward.z * 0.5 + rightZ * -0.34,
+      head.x + forward.x * 0.62 + rightX * 0.3,
+      y,
+      head.z + forward.z * 0.62 + rightZ * 0.3,
     );
-    this.iconGroup.lookAt(chest.x, chest.y + 0.08, chest.z);
-    this.dockPlaced = true;
+    this.iconGroup.lookAt(head.x, y, head.z);
   }
 
-  setOpen(open: boolean, chest: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+  setOpen(open: boolean, head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
     this.visible = open;
     this.group.visible = open && !this.photoGroup.visible;
     if (!open) {
@@ -126,12 +128,14 @@ export class FileExplorer {
       return;
     }
     if (this.userPlaced) return;
+    // Centered Quest-style panel in front of the user.
+    const y = head.y - 0.04;
     this.group.position.set(
-      chest.x + forward.x * config.explorerDistance,
-      chest.y + 0.04,
-      chest.z + forward.z * config.explorerDistance,
+      head.x + forward.x * config.explorerDistance,
+      y,
+      head.z + forward.z * config.explorerDistance,
     );
-    this.group.lookAt(chest.x, chest.y, chest.z);
+    this.group.lookAt(head.x, y, head.z);
   }
 
   /** Pinch-drag the chrome title bar to reposition Finder. */
@@ -146,16 +150,17 @@ export class FileExplorer {
 
   hitMoveHandle(point: { x: number; y: number; z: number }, radius = 0.12): boolean {
     if (!this.visible || !this.group.visible) return false;
-    // Title bar wins first so card/folder hit boxes cannot block drag.
+    // Large title-bar grab first so cards cannot steal the drag.
     this.moveHit.updateWorldMatrix(true, true);
     this.moveHit.getWorldPosition(this.world);
-    if (this.world.distanceTo(point as never) < Math.max(radius, 0.16)) return true;
-    if (this.hitClose(point, 0.07) || this.hitFolder(point, 0.08) || this.hitTest(point, 0.1)) {
+    if (this.world.distanceTo(point as never) < Math.max(radius, 0.22)) return true;
+    if (this.hitClose(point, 0.06) || this.hitFolder(point, 0.07) || this.hitTest(point, 0.09)) {
       return false;
     }
+    // Empty chrome / panel edges are also draggable.
     this.panel.updateWorldMatrix(true, true);
     this.panel.getWorldPosition(this.world);
-    return this.world.distanceTo(point as never) < Math.max(radius, FINDER_WIDTH * 0.42);
+    return this.world.distanceTo(point as never) < Math.max(radius, FINDER_WIDTH * 0.48);
   }
 
   hover(id: string | null): void {
@@ -194,7 +199,7 @@ export class FileExplorer {
 
   async openPhotoPrint(
     id: string,
-    chest: { x: number; y: number; z: number },
+    head: { x: number; y: number; z: number },
     forward: { x: number; z: number },
   ): Promise<Mesh> {
     this.photoGroup.clear();
@@ -213,13 +218,15 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    const centerY = chest.y + 0.16;
+    // Centered ahead of the user — not in the face (was ~0.45m).
+    const distance = 1.05;
+    const centerY = head.y - 0.02;
     mesh.position.set(
-      chest.x + forward.x * 0.45,
+      head.x + forward.x * distance,
       centerY,
-      chest.z + forward.z * 0.45,
+      head.z + forward.z * distance,
     );
-    mesh.lookAt(chest.x, centerY + 0.05, chest.z);
+    mesh.lookAt(head.x, centerY, head.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
     const shadow = new Mesh(
       new PlaneGeometry(width * 1.05, height * 1.05),
@@ -228,10 +235,24 @@ export class FileExplorer {
     shadow.position.copy(mesh.position);
     shadow.position.y -= 0.01;
     shadow.quaternion.copy(mesh.quaternion);
-    this.photoGroup.add(shadow, mesh);
+    const guide = new Mesh(
+      new PlaneGeometry(0.42, 0.07),
+      new MeshBasicMaterial({
+        map: new CanvasTexture(makeGuidanceCanvas('Point with your index finger · long-press the object')),
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    guide.position.copy(mesh.position);
+    guide.quaternion.copy(mesh.quaternion);
+    guide.translateY(-(height * 0.5 + 0.06));
+    guide.translateZ(0.002);
+    guide.userData.photoGuide = true;
+    this.photoGroup.add(shadow, mesh, guide);
     this.photoGroup.visible = true;
     this.group.visible = false;
-    this.iconGroup.visible = false;
+    // Dock stays head-locked top-right so Finder can be opened again later.
+    this.iconGroup.visible = true;
     this.openPhoto = mesh;
     this.dimOthers(id, true);
     return mesh;
@@ -320,10 +341,10 @@ export class FileExplorer {
     this.closeHit.position.set(-FINDER_WIDTH * 0.44, FINDER_HEIGHT * 0.42, 0.01);
     this.closeHit.userData.close = true;
     this.moveHit = new Mesh(
-      new PlaneGeometry(FINDER_WIDTH * 0.72, FINDER_HEIGHT * 0.12),
+      new PlaneGeometry(FINDER_WIDTH * 0.92, FINDER_HEIGHT * 0.18),
       new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
     );
-    this.moveHit.position.set(0.02, FINDER_HEIGHT * 0.42, 0.01);
+    this.moveHit.position.set(0, FINDER_HEIGHT * 0.4, 0.016);
     this.moveHit.userData.finderMove = true;
     const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
     const sideX = -FINDER_WIDTH * 0.39;

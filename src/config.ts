@@ -14,7 +14,8 @@ const numericDefaults = {
   maxObjects: 3,
   hintIdleSeconds: 8,
   maxTriangles: 30000,
-  libraryDistance: 0.55,
+  /** Quest-style panel distance (meters in front of the head). */
+  libraryDistance: 0.9,
   libraryWidth: 0.9,
   openBookWidth: 0.42,
   moviePrepSeconds: 20,
