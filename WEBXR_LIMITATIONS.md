@@ -116,3 +116,13 @@ drew cyan `EdgesGeometry` stubs, scan bars, particles, and scene-capture
 **column** planes. `finish()` did not always remove those columns, so blue
 rectangles lingered in the room. Conversion wait UX is now a soft white ring
 only; no cyan wireframes.
+
+## Pop-out requires a custom OK-hand unlock
+
+Accidental long-presses and unreliable thin-plane poke tests made “hold the
+photo” feel broken. Pop-out is now a two-step product gesture:
+
+1. Show the one-hand **OK** pose (thumb+index ring, other fingers up) to arm.
+2. Then index long-press the target.
+
+Without the OK unlock, long-press does nothing.

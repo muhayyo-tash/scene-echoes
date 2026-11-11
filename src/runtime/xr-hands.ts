@@ -9,8 +9,12 @@ const JOINTS = [
   'thumb-tip',
   'index-finger-tip',
   'index-finger-phalanx-proximal',
+  'middle-finger-tip',
   'middle-finger-phalanx-proximal',
+  'ring-finger-tip',
   'ring-finger-phalanx-proximal',
+  'pinky-finger-tip',
+  'pinky-finger-phalanx-proximal',
 ] as const;
 
 export function samplesFromFrame(

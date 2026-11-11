@@ -65,6 +65,13 @@ import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
 import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
 import { SceneCapture } from '../core/scene-capture.js';
+import {
+  consumeOkArm,
+  createOkGestureState,
+  isOkHandPose,
+  updateOkGesture,
+  type OkGestureState,
+} from '../core/ok-gesture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
 import { createModelSource, createFilmProcessing, type LiveFilmResult } from '../conversion/source.js';
@@ -168,6 +175,9 @@ export class SceneEchoesApp {
     /** Seconds since last valid contact — absorbs Quest tracking dropouts. */
     lost: number;
   } = { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
+  /** OK-hand unlock — required before any pop-out long-press. */
+  private okGesture: OkGestureState = createOkGestureState();
+  private okArmedHintAt = 0;
   private desktopHold: {
     x: number;
     y: number;
@@ -330,6 +340,7 @@ export class SceneEchoesApp {
     );
     this.hands.slide = slideL ?? slideR;
     this.hands.anyPinch = this.hands.left.pinched || this.hands.right.pinched;
+    this.updateOkUnlock(dt, input);
     const lowest = [input.left?.wrist?.y, input.right?.wrist?.y].filter((n): n is number => n !== undefined);
     maybeDefaultFloor(
       this.surfaces,
@@ -640,7 +651,17 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      // Broad distance hit (Finder-icon style) — thin plane tests failed on Quest.
+      // Pop requires OK unlock, then a separate index hold on the photo.
+      if (!this.okGesture.armed || this.okGesture.armedFor < 0.25) {
+        this.photoHold = emptyPhotoHold();
+        this.holdProgressRing.visible = false;
+        this.explorer.setPhotoTouchFeedback(null, 0, false);
+        if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
+          void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
+        }
+        return;
+      }
+
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
       let holdUv: { x: number; y: number } | null = null;
@@ -651,9 +672,10 @@ export class SceneEchoesApp {
       for (const hand of hands) {
         if (!object) break;
         if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
+        // Prefer a straight index poke; pinch mid is a fallback if tip drops.
         const tip = hand.indexTip ?? hand.pinchPosition;
         if (!tip) continue;
-        const uv = this.explorer.hitOpenPhoto(tip, 0.2);
+        const uv = this.explorer.hitOpenPhoto(tip, 0.25);
         if (!uv) continue;
         holding = true;
         holdTip = tip;
@@ -678,7 +700,7 @@ export class SceneEchoesApp {
 
       if (!holding && this.photoHold.contacted && this.photoHold.uv && this.photoHold.origin) {
         this.photoHold.lost += dt;
-        if (this.photoHold.lost < 0.35) {
+        if (this.photoHold.lost < 0.4) {
           holding = true;
           holdTip = this.photoHold.origin;
           holdUv = this.photoHold.uv;
@@ -713,6 +735,7 @@ export class SceneEchoesApp {
           this.holdProgressRing.visible = false;
           this.explorer.setPhotoTouchFeedback(null, 0, false);
           this.audio.play('click', tip);
+          if (!consumeOkArm(this.okGesture)) return;
           void this.beginConversion(object.id, new Vector3(tip.x, tip.y, tip.z), false, uv);
           return;
         }
@@ -736,16 +759,49 @@ export class SceneEchoesApp {
     this.updateSceneHold(input);
   }
 
+  private updateOkUnlock(dt: number, _input: FrameInput): void {
+    // Flat desktop preview has no hand joints — keep pop armed for click-hold.
+    if (this.desktop) {
+      this.okGesture.armed = true;
+      return;
+    }
+    const posing =
+      [this.hands.right, this.hands.left]
+        .filter((hand) => hand.tracked)
+        .map((hand) => hand.joints)
+        .find((joints) => isOkHandPose(joints)) ?? null;
+    const { justArmed } = updateOkGesture(this.okGesture, posing, dt);
+    if (justArmed) {
+      this.audio.play('chime');
+      this.okArmedHintAt = this.time;
+      if (this.space.photoOpen) {
+        this.explorer.setPhotoGuide('Armed · hold the photo with your index to pop into 3D');
+      }
+    } else if (
+      this.space.photoOpen &&
+      !this.okGesture.armed &&
+      this.okArmedHintAt > 0 &&
+      this.time - this.okArmedHintAt > 0.2
+    ) {
+      this.explorer.setPhotoGuide('OK gesture first · then hold the photo to pop into 3D');
+      this.okArmedHintAt = 0;
+    }
+  }
+
   private updateSceneHold(input: FrameInput): void {
     if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen) return;
+    // Must unlock with OK, then release it, then long-press (not the same pose).
+    if (!this.okGesture.armed || this.okGesture.armedFor < 0.3) return;
     for (const hand of [this.hands.left, this.hands.right]) {
       if (!hand.longPress.fired) continue;
+      if (isOkHandPose(hand.joints)) continue;
       const tip = hand.pinchPosition ?? hand.indexTip;
       if (tip && this.explorer.hitIcon(tip, 0.12)) continue;
       const origin = tip
         ? new Vector3(tip.x, tip.y, tip.z)
         : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
       hand.longPress.fired = false;
+      if (!consumeOkArm(this.okGesture)) return;
       void this.beginSceneCapture(origin);
       return;
     }
@@ -1123,12 +1179,15 @@ export class SceneEchoesApp {
 
   private updateBookHold(input: FrameInput): void {
     if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen || this.converting) return;
+    if (!this.okGesture.armed || this.okGesture.armedFor < 0.3) return;
     const floorY = floorHeight(this.surfaces.surfaces);
     for (const hand of [this.hands.left, this.hands.right]) {
       if (!hand.surfaceHold.fired || !hand.indexTip) continue;
+      if (isOkHandPose(hand.joints)) continue;
       const near = fingertipNearSurface(hand.indexTip, this.surfaces.surfaces);
       if (!near || !isElevatedSurface(near.surface, floorY, config.bookTableAboveFloor)) continue;
       hand.surfaceHold.fired = false;
+      if (!consumeOkArm(this.okGesture)) return;
       void this.beginSceneCapture(new Vector3(hand.indexTip.x, hand.indexTip.y, hand.indexTip.z));
       return;
     }

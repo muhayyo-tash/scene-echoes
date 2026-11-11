@@ -249,7 +249,9 @@ export class FileExplorer {
     const guide = new Mesh(
       new PlaneGeometry(0.42, 0.07),
       new MeshBasicMaterial({
-        map: new CanvasTexture(makeGuidanceCanvas('Touch the photo · hold to pop into 3D')),
+        map: new CanvasTexture(
+          makeGuidanceCanvas('OK gesture first · then hold the photo to pop into 3D'),
+        ),
         transparent: true,
         depthWrite: false,
       }),
@@ -344,26 +346,47 @@ export class FileExplorer {
   }
 
   /**
-   * Broad near-field hit on the open print — same idea as hitIcon (distance),
-   * not a razor-thin plane test. Returns a UV estimate for conversion.
+   * Broad near-field hit on the open print — slab test, then a sphere fallback
+   * so Quest tip jitter still counts when the finger is clearly at the photo.
    */
   hitOpenPhoto(
     point: { x: number; y: number; z: number },
-    pad = 0.16,
+    pad = 0.22,
   ): { x: number; y: number } | null {
     const photo = this.openPhoto;
     if (!photo || !this.photoGroup.visible) return null;
     photo.updateWorldMatrix(true, true);
-    const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
+    photo.getWorldPosition(this.world);
     const size = photo.userData.photoSize as { width: number; height: number } | undefined;
     const w = size?.width ?? config.openPhotoWidth;
     const h = size?.height ?? config.openPhotoWidth * 0.75;
-    // Thick slab in front of / through the print so Quest fingertips register.
-    if (local.z > 0.45 || local.z < -0.2) return null;
-    const u = local.x / w + 0.5;
-    const v = 0.5 - local.y / h;
-    if (u < -pad || u > 1 + pad || v < -pad || v > 1 + pad) return null;
-    return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
+    const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
+    // Thick slab in front of / through the print.
+    if (local.z <= 0.5 && local.z >= -0.25) {
+      const u = local.x / w + 0.5;
+      const v = 0.5 - local.y / h;
+      if (u >= -pad && u <= 1 + pad && v >= -pad && v <= 1 + pad) {
+        return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
+      }
+    }
+    // Sphere fallback around the print center (arm-reach poke).
+    const reach = Math.hypot(w, h) * 0.55 + 0.12;
+    if (this.world.distanceTo(point as never) <= reach) {
+      return { x: 0.5, y: 0.45 };
+    }
+    return null;
+  }
+
+  setPhotoGuide(text: string): void {
+    const guide = this.photoGroup.children.find((c) => (c as Mesh).userData?.photoGuide) as
+      | Mesh
+      | undefined;
+    if (!guide) return;
+    const mat = guide.material as MeshBasicMaterial;
+    const prev = mat.map;
+    mat.map = new CanvasTexture(makeGuidanceCanvas(text));
+    mat.needsUpdate = true;
+    prev?.dispose();
   }
 
   hitIcon(point: { x: number; y: number; z: number }, radius = 0.08): boolean {

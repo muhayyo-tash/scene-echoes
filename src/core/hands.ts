@@ -31,6 +31,8 @@ export interface HandRuntime {
   wrist: Vec3 | null;
   rayOrigin: Vec3 | null;
   rayDirection: Vec3 | null;
+  /** Latest joint map for custom gestures (OK unlock, etc.). */
+  joints: Partial<Record<string, Vec3>>;
   justPinched: boolean;
   velocity: Vec3;
   open: boolean;
@@ -62,6 +64,7 @@ function emptyHand(handedness: 'left' | 'right'): HandRuntime {
     wrist: null,
     rayOrigin: null,
     rayDirection: null,
+    joints: {},
     justPinched: false,
     velocity: { x: 0, y: 0, z: 0 },
     open: false,
@@ -101,6 +104,7 @@ export function updateHandRuntime(
     hand.pinchPosition = null;
     hand.rayOrigin = null;
     hand.rayDirection = null;
+    hand.joints = {};
     hand.justPinched = false;
     return null;
   }
@@ -114,6 +118,7 @@ export function updateHandRuntime(
   hand.wrist = sample.wrist;
   hand.rayOrigin = sample.rayOrigin;
   hand.rayDirection = sample.rayDirection;
+  hand.joints = sample.joints;
   if (prev && sample.wrist && dt > 0) {
     const alpha = 0.35;
     const vx = (sample.wrist.x - prev.x) / dt;
