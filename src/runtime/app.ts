@@ -151,6 +151,10 @@ export class SceneEchoesApp {
   private seatPressed: PlacedObject | null = null;
   /** Prevents double-fire from the same pinch burst (Meta-style debounce). */
   private photoPinchCooldown = 0;
+  /** Timestamp when the open photo appeared — ignore pinches until settled. */
+  private photoOpenedAt = -999;
+  /** User must fully release the hand after opening the photo before a pop pinch counts. */
+  private photoSawOpenHand = false;
   private desktopHold: {
     x: number;
     y: number;
@@ -590,13 +594,18 @@ export class SceneEchoesApp {
       y: input.head.position.y,
       z: input.head.position.z,
     }, forward);
-    // User already chose this photo — start fetching its GLB now (not a global preload).
+    // User already chose this photo — warm its GLB quietly (does not start conversion).
     const object = this.objects.find((item) => item.id === id);
     if (object?.model) {
       void loadModel(object).catch((error) => {
         console.warn('[scene-echoes] warm model failed', id, error);
       });
     }
+    // The pinch that opened this card must not also pop it.
+    this.photoOpenedAt = this.time;
+    this.photoSawOpenHand = false;
+    this.photoPinchCooldown = 0.9;
+    this.explorer.setPhotoGuide('Point at the photo · pinch to pop into 3D');
     this.hintPlayed.pinch = true;
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
@@ -642,29 +651,29 @@ export class SceneEchoesApp {
         this.objects.find((item) => item.scene === 'object3d');
       if (!object) return;
 
-      // Meta Quest menu pattern: aim (hand ray / near tip) at the photo, then pinch.
-      // Do not fire on random hand motion — only justPinched while targeting the print.
-      if (this.photoPinchCooldown > 0) return;
+      // Meta menu pattern: open → release → aim ray at target → pinch.
+      // Never treat the open-card pinch (or tracking flicker) as a pop.
+      if (!this.hands.left.pinched && !this.hands.right.pinched) {
+        this.photoSawOpenHand = true;
+      }
+      const settled = this.time - this.photoOpenedAt >= 0.75;
+      if (!settled || !this.photoSawOpenHand || this.photoPinchCooldown > 0) return;
+
       for (const hand of [this.hands.right, this.hands.left]) {
         if (!hand.justPinched) continue;
+        // Strict aim: hand target-ray must hit the print (same as Quest system UI).
         const pick = this.uiPick(hand);
-        const kind = this.uiKind(pick?.object ?? null);
-        const tip = hand.pinchPosition ?? hand.indexTip;
-        const tipUv = tip ? this.explorer.hitOpenPhoto(tip, 0.28) : null;
-        const aimed = kind?.kind === 'photo' || Boolean(tipUv);
-        if (!aimed) continue;
+        if (this.uiKind(pick?.object ?? null)?.kind !== 'photo') continue;
 
-        const uv = tipUv ?? { x: 0.5, y: 0.45 };
+        const tip = hand.pinchPosition ?? hand.indexTip;
         const origin = tip
           ? new Vector3(tip.x, tip.y, tip.z)
           : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
-        this.photoPinchCooldown = 0.8;
+        const uv = tip ? this.explorer.hitOpenPhoto(tip, 0.2) ?? { x: 0.5, y: 0.45 } : { x: 0.5, y: 0.45 };
+        this.photoPinchCooldown = 1.0;
         this.audio.play('click', origin);
         void this.beginConversion(object.id, origin, false, uv);
         return;
-      }
-      if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds) {
-        void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
       return;
     }
