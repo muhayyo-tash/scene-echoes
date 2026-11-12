@@ -40,6 +40,7 @@ import {
   maybeDefaultFloor,
   nearestHorizontal,
   palmCalibrate,
+  projectOntoSurface,
   upsertSurface,
   type RoomSurface,
   type SurfaceFinderState,
@@ -279,6 +280,15 @@ export class SceneEchoesApp {
   update(dt: number, input: FrameInput): void {
     if (input.paused) {
       this.audio.pause();
+      // Still finish a pending place while XR is blurred (Quest "Resume" screen),
+      // so a load that completed mid-pause is not stuck invisible forever.
+      if (this.pendingConverted) {
+        const { object, model } = this.pendingConverted;
+        this.pendingConverted = null;
+        const finished = this.conversion.finish() ?? model;
+        const spawn = this.spawnPoint(input);
+        void this.finishConversionPlace(object, finished, spawn);
+      }
       return;
     }
     this.audio.resume();
@@ -789,6 +799,30 @@ export class SceneEchoesApp {
   }
 
   private spawnPoint(input: FrameInput): Vector3 {
+    // From an open photo: drop the model under the print so it stays in view.
+    // (Head-forward floor spawn often landed out of FOV or under a bad plane.)
+    const photo = this.explorer.openPhoto;
+    if (this.space.photoOpen && photo) {
+      photo.updateWorldMatrix(true, true);
+      const at = photo.getWorldPosition(new Vector3());
+      const towardHead = {
+        x: input.head.position.x - at.x,
+        y: 0,
+        z: input.head.position.z - at.z,
+      };
+      const len = Math.hypot(towardHead.x, towardHead.z) || 1;
+      const candidate = {
+        x: at.x + (towardHead.x / len) * 0.15,
+        y: at.y - 0.35,
+        z: at.z + (towardHead.z / len) * 0.15,
+      };
+      const surface = nearestHorizontal(this.surfaces.surfaces, candidate);
+      if (surface) {
+        const onFloor = projectOntoSurface(candidate, surface);
+        return new Vector3(onFloor.x, onFloor.y, onFloor.z);
+      }
+      return new Vector3(candidate.x, Math.max(0.05, candidate.y), candidate.z);
+    }
     const placed = spawnInFront(
       {
         x: input.head.position.x,

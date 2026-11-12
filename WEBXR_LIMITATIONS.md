@@ -78,13 +78,15 @@ a machine with secrets (local `/v1/*` proxy). On Pages, conversion falls back to
 the **bundled sofa GLB** via the manifest model source. Live mode is
 laptop-only (`CONVERSION_API_URL` + `?live=1`), not the competition URL.
 
-## Depth sensing can eat nearby UI
+## Depth sensing can eat nearby UI (and whole models)
 
-With optional depth occlusion enabled, near-field HUD meshes can disappear into
-passthrough depth if they write/test depth like scene geometry.
+With `enableOcclusion: true`, virtual content can vanish in immersive AR
+passthrough and only reappear when the session blurs (Quest Browser **Resume**
+screen). That looked like “the sofa only shows in the browser.”
 
-**What we do instead:** Finder dock materials use `depthTest: false`,
-`depthWrite: false`, and a high `renderOrder` so the icon stays drawn on top.
+**What we do instead:** `DepthSensingSystem` keeps the depth texture but
+`enableOcclusion: false` until meshes explicitly opt in with `DepthOccludable`.
+Meta Echoes dock materials also use `depthTest: false` / high `renderOrder`.
 
 ## AudioContext needs a user gesture
 

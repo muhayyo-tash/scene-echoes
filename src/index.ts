@@ -116,10 +116,13 @@ void (async () => {
   world.scene.background = null;
   world.renderer.setClearAlpha(0);
   try {
+    // Depth texture OK for future use, but global occlusion hides placed models
+    // in immersive AR until the session blurs (Quest "Resume" browser view).
+    // Only enable occlusion once specific meshes opt in via DepthOccludable.
     world.registerSystem(DepthSensingSystem, {
       configData: {
         enableDepthTexture: true,
-        enableOcclusion: true,
+        enableOcclusion: false,
         useFloat32: true,
         blurRadius: 20,
       },
