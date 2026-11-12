@@ -57,6 +57,7 @@ export class FileExplorer {
   private layouts: CardLayout[] = [];
   private readonly world = new Vector3();
   private photoRestScale = 1;
+  private photoGuideText = '';
 
   constructor(
     private readonly entries: ExplorerEntry[],
@@ -221,7 +222,7 @@ export class FileExplorer {
     const height = width * aspect;
     const mesh = new Mesh(
       new PlaneGeometry(width, height),
-      new MeshBasicMaterial({ map: framed, toneMapped: false }),
+      new MeshBasicMaterial({ map: framed, toneMapped: false, side: DoubleSide }),
     );
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
@@ -236,6 +237,16 @@ export class FileExplorer {
     );
     mesh.lookAt(head.x, centerY, head.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
+    // Invisible larger hit plate — thin photo alone is easy for hand rays to miss.
+    const hitPlate = new Mesh(
+      new PlaneGeometry(width * 1.35, height * 1.35),
+      new MeshBasicMaterial({ visible: false, side: DoubleSide }),
+    );
+    hitPlate.position.copy(mesh.position);
+    hitPlate.quaternion.copy(mesh.quaternion);
+    hitPlate.translateZ(-0.001);
+    hitPlate.userData.photoPrint = true;
+    hitPlate.userData.objectId = id;
     const shadow = new Mesh(
       new PlaneGeometry(width * 1.05, height * 1.05),
       new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }),
@@ -249,7 +260,7 @@ export class FileExplorer {
       new PlaneGeometry(0.42, 0.07),
       new MeshBasicMaterial({
         map: new CanvasTexture(
-          makeGuidanceCanvas('Point at the photo · pinch to pop into 3D'),
+          makeGuidanceCanvas('Release · then point at the photo'),
         ),
         transparent: true,
         depthWrite: false,
@@ -262,8 +273,9 @@ export class FileExplorer {
     guide.userData.photoGuide = true;
     guide.raycast = () => undefined;
     this.photoRestScale = 1;
+    this.photoGuideText = 'Release · then point at the photo';
     this.photoGroup.userData.photoPrint = true;
-    this.photoGroup.add(shadow, mesh, guide);
+    this.photoGroup.add(shadow, hitPlate, mesh, guide);
     this.photoGroup.visible = true;
     this.group.visible = false;
     // Dock stays head-locked top-right so Finder can be opened again later.
@@ -276,6 +288,7 @@ export class FileExplorer {
   closePhoto(): void {
     this.photoGroup.visible = false;
     this.photoGroup.userData.photoPrint = false;
+    this.photoGuideText = '';
     this.openPhoto = null;
     this.dimOthers(null, false);
     this.group.visible = this.visible;
@@ -299,7 +312,7 @@ export class FileExplorer {
     const w = size?.width ?? config.openPhotoWidth;
     const h = size?.height ?? config.openPhotoWidth * 0.75;
     const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
-    if (local.z <= 0.35 && local.z >= -0.2) {
+    if (local.z <= 0.45 && local.z >= -0.25) {
       const u = local.x / w + 0.5;
       const v = 0.5 - local.y / h;
       if (u >= -pad && u <= 1 + pad && v >= -pad && v <= 1 + pad) {
@@ -313,10 +326,12 @@ export class FileExplorer {
   }
 
   setPhotoGuide(text: string): void {
+    if (text === this.photoGuideText) return;
     const guide = this.photoGroup.children.find((c) => (c as Mesh).userData?.photoGuide) as
       | Mesh
       | undefined;
     if (!guide) return;
+    this.photoGuideText = text;
     const mat = guide.material as MeshBasicMaterial;
     const prev = mat.map;
     mat.map = new CanvasTexture(makeGuidanceCanvas(text));

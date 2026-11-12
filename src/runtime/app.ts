@@ -32,6 +32,7 @@ import {
   pokeSurface,
   updateHandRuntime,
   handSpeed,
+  type HandRuntime,
 } from '../core/hands.js';
 import {
   createSurfaceFinder,
@@ -607,11 +608,56 @@ export class SceneEchoesApp {
     // The pinch that opened this card must not also pop it.
     this.photoOpenedAt = this.time;
     this.photoSawOpenHand = false;
-    this.photoPinchCooldown = 0.9;
-    this.explorer.setPhotoGuide('Point at the photo · pinch to pop into 3D');
+    this.photoPinchCooldown = 0.45;
+    this.explorer.setPhotoGuide('Release · then point at the photo');
     this.hintPlayed.pinch = true;
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
+  }
+
+  /** Aim helpers for open-photo pop: target-ray, tip→ray fallback, tip slab. */
+  private photoAim(
+    hand: {
+      rayOrigin: { x: number; y: number; z: number } | null;
+      rayDirection: { x: number; y: number; z: number } | null;
+      indexTip: { x: number; y: number; z: number } | null;
+      wrist: { x: number; y: number; z: number } | null;
+      pinchPosition: { x: number; y: number; z: number } | null;
+    },
+  ): { onPhoto: boolean; uv: { x: number; y: number }; point: Vector3 | null } {
+    const pick = this.uiPick(hand);
+    if (this.uiKind(pick?.object ?? null)?.kind === 'photo' && pick) {
+      return { onPhoto: true, uv: { x: 0.5, y: 0.45 }, point: pick.point };
+    }
+    // Fallback ray: wrist → index tip (works when target-ray misses near field).
+    if (hand.wrist && hand.indexTip) {
+      this.uiOrigin.set(hand.wrist.x, hand.wrist.y, hand.wrist.z);
+      this.uiDir
+        .set(
+          hand.indexTip.x - hand.wrist.x,
+          hand.indexTip.y - hand.wrist.y,
+          hand.indexTip.z - hand.wrist.z,
+        )
+        .normalize();
+      if (this.uiDir.lengthSq() > 1e-6) {
+        this.uiRaycaster.set(this.uiOrigin, this.uiDir);
+        this.uiRaycaster.far = 2.5;
+        const hits = this.uiRaycaster.intersectObject(this.explorer.photoGroup, true);
+        const hit = hits.find((entry) => this.uiKind(entry.object)?.kind === 'photo');
+        if (hit) return { onPhoto: true, uv: { x: 0.5, y: 0.45 }, point: hit.point };
+      }
+    }
+    const tip = hand.pinchPosition ?? hand.indexTip;
+    // Moderate tip volume — open→release→settle already blocks the open-card pinch.
+    const tipHit = tip ? this.explorer.hitOpenPhoto(tip, 0.2, 0.22) : null;
+    if (tipHit && tip) {
+      return {
+        onPhoto: true,
+        uv: tipHit,
+        point: new Vector3(tip.x, tip.y, tip.z),
+      };
+    }
+    return { onPhoto: false, uv: { x: 0.5, y: 0.45 }, point: null };
   }
 
   private updateConversion(dt: number, input: FrameInput): void {
@@ -652,43 +698,57 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      if (!object) return;
+      if (!object) {
+        this.explorer.setPhotoGuide('No 3D model for this photo');
+        return;
+      }
 
       // Meta menu pattern: open → release → aim at target → pinch.
       if (!this.hands.left.pinched && !this.hands.right.pinched) {
         this.photoSawOpenHand = true;
       }
-      // If tracking never fully reports "open", unblock after a short settle.
       const sinceOpen = this.time - this.photoOpenedAt;
-      if (sinceOpen >= 1.1) this.photoSawOpenHand = true;
-      const settled = sinceOpen >= 0.55;
-      if (!settled || !this.photoSawOpenHand || this.photoPinchCooldown > 0) return;
+      // Tracking sometimes never reports a clean open; unblock shortly after settle.
+      if (sinceOpen >= 0.85) this.photoSawOpenHand = true;
+      const settled = sinceOpen >= 0.4;
+      const ready =
+        settled && this.photoSawOpenHand && this.photoPinchCooldown <= 0;
 
       let aiming = false;
+      let commit: {
+        hand: HandRuntime;
+        uv: { x: number; y: number };
+        point: Vector3 | null;
+      } | null = null;
       for (const hand of [this.hands.right, this.hands.left]) {
-        const pick = this.uiPick(hand);
-        const rayOnPhoto = this.uiKind(pick?.object ?? null)?.kind === 'photo';
-        const tip = hand.pinchPosition ?? hand.indexTip;
-        // Near-field fallback: fingertip actually on the print (tight), not a huge sphere.
-        const tipOnPhoto = tip ? this.explorer.hitOpenPhoto(tip, 0.08, 0) : null;
-        if (rayOnPhoto || tipOnPhoto) aiming = true;
-
-        if (!hand.justPinched) continue;
-        if (!rayOnPhoto && !tipOnPhoto) continue;
-
-        const uv = tipOnPhoto ?? { x: 0.5, y: 0.45 };
-        const origin = tip
-          ? new Vector3(tip.x, tip.y, tip.z)
-          : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
-        this.photoPinchCooldown = 1.0;
-        this.audio.play('click', origin);
-        this.explorer.setPhotoGuide('Loading 3D model…');
-        void this.beginConversion(object.id, origin, false, uv);
-        return;
+        const aim = this.photoAim(hand);
+        if (aim.onPhoto) aiming = true;
+        if (hand.justPinched && aim.onPhoto) {
+          commit = { hand, uv: aim.uv, point: aim.point };
+        }
       }
-      this.explorer.setPhotoGuide(
-        aiming ? 'Pinch now to pop into 3D' : 'Point at the photo · pinch to pop into 3D',
-      );
+
+      // Always refresh guide — previous early-returns made the label look frozen.
+      if (!settled || this.photoPinchCooldown > 0) {
+        this.explorer.setPhotoGuide('Release · then point at the photo');
+      } else if (!this.photoSawOpenHand) {
+        this.explorer.setPhotoGuide('Open your hand · then point at the photo');
+      } else if (aiming) {
+        this.explorer.setPhotoGuide('Pinch now to pop into 3D');
+      } else {
+        this.explorer.setPhotoGuide('Point at the photo · pinch to pop into 3D');
+      }
+
+      if (!ready || !commit) return;
+
+      const tip = commit.hand.pinchPosition ?? commit.hand.indexTip;
+      const origin = tip
+        ? new Vector3(tip.x, tip.y, tip.z)
+        : commit.point?.clone() ?? photo.getWorldPosition(new Vector3());
+      this.photoPinchCooldown = 1.0;
+      this.audio.play('click', origin);
+      this.explorer.setPhotoGuide('Loading 3D model…');
+      void this.beginConversion(object.id, origin, false, commit.uv);
       return;
     }
     this.updateSceneHold(input);
