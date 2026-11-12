@@ -374,6 +374,11 @@ export class SceneEchoesApp {
       y: input.head.position.y,
       z: input.head.position.z,
     }, forward);
+    this.audio.play('click', {
+      x: this.explorer.group.position.x,
+      y: this.explorer.group.position.y,
+      z: this.explorer.group.position.z,
+    });
     if (this.space.movieOpen) this.screen.pauseForExplorer(true);
     if (debugParams.openId) {
       void this.openPhotoCard(debugParams.openId, input);
@@ -383,7 +388,18 @@ export class SceneEchoesApp {
   private closeLibrary(): void {
     this.space = closeExplorer(this.space);
     this.explorer.setOpen(false, { x: 0, y: 0, z: 0 }, { x: 0, z: -1 });
+    this.audio.play('clickUp');
     if (this.space.movieOpen) this.screen.pauseForExplorer(false);
+  }
+
+  private selectFolder(folder: FinderSection): void {
+    if (this.explorer.folder === folder) return;
+    this.explorer.setFolder(folder);
+    this.audio.play('click', {
+      x: this.explorer.group.position.x,
+      y: this.explorer.group.position.y,
+      z: this.explorer.group.position.z,
+    });
   }
 
   private updateHints(dt: number, input: FrameInput): void {
@@ -514,7 +530,7 @@ export class SceneEchoesApp {
         return;
       }
       if (target.kind === 'folder' && target.folder && this.space.explorerOpen && !this.space.photoOpen) {
-        this.explorer.setFolder(target.folder);
+        this.selectFolder(target.folder);
         return;
       }
       if (target.kind === 'card' && target.cardId && this.space.explorerOpen && !this.space.photoOpen) {
@@ -546,7 +562,7 @@ export class SceneEchoesApp {
       }
       const folder = this.explorer.hitFolder(tip, 0.09);
       if (folder && pressing) {
-        this.explorer.setFolder(folder);
+        this.selectFolder(folder);
         return;
       }
       const hit = this.explorer.hitTest(tip, 0.14);
@@ -599,6 +615,11 @@ export class SceneEchoesApp {
         y: input.head.position.y,
         z: input.head.position.z,
       }, forward);
+      this.audio.play('click', {
+        x: this.explorer.openPhoto?.position.x ?? input.head.position.x,
+        y: this.explorer.openPhoto?.position.y ?? input.head.position.y,
+        z: this.explorer.openPhoto?.position.z ?? input.head.position.z,
+      });
       // User already chose this photo — warm its GLB quietly (does not start conversion).
       const object = this.objects.find((item) => item.id === id);
       if (object?.model) {

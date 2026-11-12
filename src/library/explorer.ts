@@ -499,7 +499,7 @@ export class FileExplorer {
     const caption = new Mesh(
       new PlaneGeometry(0.16, 0.03),
       new MeshBasicMaterial({
-        map: new CanvasTexture(makeLabelCanvas('Finder', true)),
+        map: new CanvasTexture(makeLabelCanvas('Meta Echoes', true)),
         transparent: true,
         depthTest: false,
         depthWrite: false,

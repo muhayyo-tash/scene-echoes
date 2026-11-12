@@ -140,10 +140,10 @@ export function drawFinderWindow(
     movies: 'Movies',
   };
   ctx.fillStyle = '#1d1d1f';
-  ctx.font = `600 ${Math.max(14, Math.floor(h * 0.035))}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `600 ${Math.max(13, Math.floor(h * 0.032))}px -apple-system, BlinkMacSystemFont, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(titles[selected], w * 0.5, lightsY);
+  ctx.fillText(`Meta Echoes · ${titles[selected]}`, w * 0.5, lightsY);
 
   const sideW = Math.floor(w * 0.22);
   const sideTop = 8 + titleH + 10;
