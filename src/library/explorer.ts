@@ -56,9 +56,6 @@ export class FileExplorer {
   private hoverId: string | null = null;
   private layouts: CardLayout[] = [];
   private readonly world = new Vector3();
-  /** Soft contact disc on the open print (Quest-keyboard style). */
-  private pokeDot: Mesh | null = null;
-  private pokeProgress: Mesh | null = null;
   private photoRestScale = 1;
 
   constructor(
@@ -261,32 +258,6 @@ export class FileExplorer {
     guide.translateY(-(height * 0.5 + 0.06));
     guide.translateZ(0.002);
     guide.userData.photoGuide = true;
-    // Contact highlight + hold-fill ring (parented in photo local space).
-    this.pokeDot = new Mesh(
-      new PlaneGeometry(0.05, 0.05),
-      new MeshBasicMaterial({
-        color: new Color('#ffffff'),
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        side: DoubleSide,
-      }),
-    );
-    this.pokeDot.position.z = 0.004;
-    this.pokeDot.visible = false;
-    this.pokeProgress = new Mesh(
-      new PlaneGeometry(0.09, 0.09),
-      new MeshBasicMaterial({
-        color: new Color('#f4f6f2'),
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        side: DoubleSide,
-      }),
-    );
-    this.pokeProgress.position.z = 0.005;
-    this.pokeProgress.visible = false;
-    mesh.add(this.pokeDot, this.pokeProgress);
     this.photoRestScale = 1;
     this.photoGroup.add(shadow, mesh, guide);
     this.photoGroup.visible = true;
@@ -298,48 +269,9 @@ export class FileExplorer {
     return mesh;
   }
 
-  /**
-   * Quest-keyboard style contact: brighten the touch point, press the print in,
-   * and grow a fill disc while the long-press charges.
-   */
-  setPhotoTouchFeedback(
-    uv: { x: number; y: number } | null,
-    progress: number,
-    contacting: boolean,
-  ): void {
-    const photo = this.openPhoto;
-    if (!photo || !this.pokeDot || !this.pokeProgress) return;
-    const size = photo.userData.photoSize as { width: number; height: number } | undefined;
-    const w = size?.width ?? config.openPhotoWidth;
-    const h = size?.height ?? config.openPhotoWidth * 0.75;
-    if (!contacting || !uv) {
-      this.pokeDot.visible = false;
-      this.pokeProgress.visible = false;
-      (this.pokeDot.material as MeshBasicMaterial).opacity = 0;
-      (this.pokeProgress.material as MeshBasicMaterial).opacity = 0;
-      photo.scale.setScalar(this.photoRestScale);
-      return;
-    }
-    const lx = (uv.x - 0.5) * w;
-    const ly = (0.5 - uv.y) * h;
-    this.pokeDot.visible = true;
-    this.pokeDot.position.set(lx, ly, 0.004);
-    (this.pokeDot.material as MeshBasicMaterial).opacity = 0.35 + Math.min(0.45, progress * 0.45);
-    this.pokeProgress.visible = progress > 0.02;
-    this.pokeProgress.position.set(lx, ly, 0.005);
-    const fill = 0.35 + progress * 0.9;
-    this.pokeProgress.scale.setScalar(fill);
-    (this.pokeProgress.material as MeshBasicMaterial).opacity = 0.2 + progress * 0.55;
-    // Keep scale stable — scaling the print broke Quest fingertip hit tests.
-    photo.scale.setScalar(this.photoRestScale);
-  }
-
   closePhoto(): void {
-    this.setPhotoTouchFeedback(null, 0, false);
     this.photoGroup.visible = false;
     this.openPhoto = null;
-    this.pokeDot = null;
-    this.pokeProgress = null;
     this.dimOthers(null, false);
     this.group.visible = this.visible;
     this.iconGroup.visible = true;
@@ -355,9 +287,6 @@ export class FileExplorer {
   ): { x: number; y: number } | null {
     const photo = this.openPhoto;
     if (!photo || !this.photoGroup.visible) return null;
-    // Hit tests must ignore press-in scale feedback.
-    const savedScale = photo.scale.x;
-    photo.scale.setScalar(this.photoRestScale);
     photo.updateWorldMatrix(true, true);
     photo.getWorldPosition(this.world);
     const size = photo.userData.photoSize as { width: number; height: number } | undefined;
@@ -366,8 +295,6 @@ export class FileExplorer {
     const reach = Math.max(0.38, Math.hypot(w, h) * 0.75 + 0.2);
     const nearCenter = this.world.distanceTo(point as never) <= reach;
     const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
-    photo.scale.setScalar(savedScale);
-    photo.updateWorldMatrix(true, true);
     if (local.z <= 0.7 && local.z >= -0.35) {
       const u = local.x / w + 0.5;
       const v = 0.5 - local.y / h;

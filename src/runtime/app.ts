@@ -123,16 +123,6 @@ export class SceneEchoesApp {
     new RingGeometry(0.08, 0.09, 32),
     new MeshBasicMaterial({ color: new Color('#dff6e8'), transparent: true, opacity: 0.4 }),
   );
-  /** Neutral hold progress (only while index long-press is active on a photo). */
-  private holdProgressRing = new Mesh(
-    new RingGeometry(0.03, 0.042, 40),
-    new MeshBasicMaterial({
-      color: new Color('#ffffff'),
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-    }),
-  );
   debug = mountDebugPanel();
   idle = 0;
   desktop = false;
@@ -203,13 +193,11 @@ export class SceneEchoesApp {
     createFallbackLights(this.scene);
     this.landingRing.rotation.x = -Math.PI / 2;
     this.landingRing.visible = false;
-    this.holdProgressRing.visible = false;
     this.scene.add(
       this.placed,
       this.conversion.group,
       this.ghost,
       this.landingRing,
-      this.holdProgressRing,
       this.screen.group,
     );
     this.movie = new MovieScene([]);
@@ -620,7 +608,13 @@ export class SceneEchoesApp {
       y: input.head.position.y,
       z: input.head.position.z,
     }, forward);
-    // Guidance label on the photo teaches index long-press; no blue ghost overlay.
+    // User already chose this photo — start fetching its GLB now (not a global preload).
+    const object = this.objects.find((item) => item.id === id);
+    if (object?.model) {
+      void loadModel(object).catch((error) => {
+        console.warn('[scene-echoes] warm model failed', id, error);
+      });
+    }
     this.hintPlayed.pinch = true;
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
@@ -628,27 +622,24 @@ export class SceneEchoesApp {
 
   private updateConversion(dt: number, input: FrameInput): void {
     if (this.pendingConverted) {
-      this.conversionElapsed += dt;
-      const progress = Math.min(1, this.conversionElapsed / Math.max(0.05, config.popOutSeconds));
-      this.conversion.update(progress);
-      if (progress >= 1) {
-        const { object, model } = this.pendingConverted;
-        this.pendingConverted = null;
-        const finished = this.conversion.finish() ?? model;
-        const spawn = this.spawnPoint(input);
-        this.clearHandFeedback();
-        // Place (jelly shader patch) on the next frame so the reveal can finish cleanly.
-        void this.finishConversionPlace(object, finished, spawn);
-      }
+      // Place immediately — no ring / reveal delay that looked like a hollow circle.
+      const { object, model } = this.pendingConverted;
+      this.pendingConverted = null;
+      const finished = this.conversion.finish() ?? model;
+      const spawn = this.spawnPoint(input);
+      this.clearHandFeedback();
+      void this.finishConversionPlace(object, finished, spawn);
       return;
     }
     if (this.converting) {
       this.convertingSince += dt;
       this.clearHandFeedback();
-      // Stay in the soft "waiting" band — never the old blue build wire phase.
-      this.conversion.update(0.06 + (Math.sin(this.time * 2.2) * 0.5 + 0.5) * 0.1);
-      // Unstick if a load hung (Quest Wi-Fi / GLB fetch).
-      if (!this.pendingConverted && this.convertingSince > 40) {
+      this.conversion.update(0);
+      if (this.space.photoOpen && Math.floor(this.convertingSince) !== Math.floor(this.convertingSince - dt)) {
+        this.explorer.setPhotoGuide(`Loading 3D model… ${Math.floor(this.convertingSince)}s`);
+      }
+      // Sofa GLB is large; allow a long fetch on Quest Wi-Fi.
+      if (!this.pendingConverted && this.convertingSince > 90) {
         console.warn('[scene-echoes] conversion timed out');
         this.conversion.finish();
         this.converting = false;
@@ -657,6 +648,9 @@ export class SceneEchoesApp {
         this.okGesture.armedFor = 1;
         this.space.space = this.space.photoOpen ? 'photo' : 'clean';
         this.audio.play('thud');
+        if (this.space.photoOpen) {
+          this.explorer.setPhotoGuide('Load timed out · OK again, then pinch');
+        }
       }
       return;
     }
@@ -667,12 +661,8 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      // Pop requires OK unlock first. Commit with the same pinch that already
-      // opens Finder cards — Quest poke hit tests were never reliable here.
       if (!this.okGesture.armed || this.okGesture.armedFor < 0.15) {
         this.photoHold = emptyPhotoHold();
-        this.holdProgressRing.visible = false;
-        this.explorer.setPhotoTouchFeedback(null, 0, false);
         if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
           void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
         }
@@ -681,109 +671,22 @@ export class SceneEchoesApp {
 
       if (!object) return;
 
-      // Primary: after OK, pinch while aiming at / near the open photo.
+      // After OK: pinch to pop (same select gesture as Finder cards).
       for (const hand of [this.hands.right, this.hands.left]) {
         if (!hand.justPinched) continue;
-        const pick = this.uiPick(hand);
-        const kind = this.uiKind(pick?.object ?? null);
         const tip = hand.pinchPosition ?? hand.indexTip;
-        const near =
-          (tip ? this.explorer.hitOpenPhoto(tip, 0.5) : null) ||
-          (kind?.kind === 'photo' ? { x: 0.5, y: 0.45 } : null);
-        // If they pinch after OK with the photo open, accept even a loose aim —
-        // the unlock already expressed intent.
-        const uv = near ?? { x: 0.5, y: 0.45 };
+        const uv = (tip ? this.explorer.hitOpenPhoto(tip, 0.55) : null) ?? { x: 0.5, y: 0.45 };
         const origin = tip
           ? new Vector3(tip.x, tip.y, tip.z)
-          : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
+          : photo.getWorldPosition(new Vector3());
         this.audio.play('click', origin);
         this.photoHold = emptyPhotoHold();
-        this.holdProgressRing.visible = false;
-        this.explorer.setPhotoTouchFeedback(uv, 1, true);
         void this.beginConversion(object.id, origin, false, uv);
         return;
-      }
-
-      // Secondary: dwell with index tip near the print (large sphere only).
-      let holding = false;
-      let holdTip: { x: number; y: number; z: number } | null = null;
-      let holdUv: { x: number; y: number } | null = null;
-      for (const hand of [this.hands.right, this.hands.left]) {
-        const tip = hand.indexTip;
-        if (!tip) continue;
-        const uv = this.explorer.hitOpenPhoto(tip, 0.5);
-        if (!uv) continue;
-        holding = true;
-        holdTip = tip;
-        holdUv = uv;
-        if (!this.photoHold.origin) {
-          this.photoHold = {
-            hand: hand.handedness,
-            elapsed: 0,
-            origin: { x: tip.x, y: tip.y, z: tip.z },
-            uv,
-            contacted: false,
-            lastTick: 0,
-            lost: 0,
-          };
-        }
-        this.photoHold.lost = 0;
-        this.photoHold.uv = uv;
-        this.photoHold.origin = { x: tip.x, y: tip.y, z: tip.z };
-        this.photoHold.elapsed += dt;
-        break;
-      }
-
-      if (!holding && this.photoHold.contacted && this.photoHold.uv && this.photoHold.origin) {
-        this.photoHold.lost += dt;
-        if (this.photoHold.lost < 0.5) {
-          holding = true;
-          holdTip = this.photoHold.origin;
-          holdUv = this.photoHold.uv;
-        }
-      }
-
-      if (!holding || !holdTip || !holdUv) {
-        if (this.photoHold.contacted) this.audio.play('clickUp', this.photoHold.origin ?? undefined);
-        this.photoHold = emptyPhotoHold();
-        this.holdProgressRing.visible = false;
-        this.explorer.setPhotoTouchFeedback(null, 0, false);
-      } else {
-        const progress = Math.min(1, this.photoHold.elapsed / config.longPressSeconds);
-        if (!this.photoHold.contacted) {
-          this.photoHold.contacted = true;
-          this.audio.play('click', holdTip);
-        }
-        if (progress > 0.1 && progress < 1) {
-          const bucket = Math.floor(progress * 4);
-          if (bucket !== this.photoHold.lastTick) {
-            this.photoHold.lastTick = bucket;
-            this.audio.play('tick', holdTip);
-          }
-        }
-        this.explorer.setPhotoTouchFeedback(holdUv, progress, true);
-        this.holdProgressRing.visible = true;
-        this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
-        this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
-        (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.55 + progress * 0.4;
-        this.holdProgressRing.lookAt(input.head.position);
-        if (progress >= 1) {
-          this.photoHold = emptyPhotoHold();
-          this.holdProgressRing.visible = false;
-          this.audio.play('click', holdTip);
-          void this.beginConversion(
-            object.id,
-            new Vector3(holdTip.x, holdTip.y, holdTip.z),
-            false,
-            holdUv,
-          );
-          return;
-        }
       }
       return;
     }
     this.photoHold = emptyPhotoHold();
-    this.holdProgressRing.visible = false;
     this.updateSceneHold(input);
   }
 
@@ -897,18 +800,16 @@ export class SceneEchoesApp {
       this.audio.play('whoosh', origin);
     }
     try {
-      // Let one frame paint the conversion FX before any GLB work.
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (this.space.photoOpen) {
+        this.explorer.setPhotoGuide('Loading 3D model…');
+      }
       const handle = await this.modelSource.request(id, point);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const model = handle.root as Group;
+      model.visible = true;
       this.conversion.attachModel(model);
       this.conversionElapsed = 0;
       this.pendingConverted = { object: handle.object, model, origin };
       consumeOkArm(this.okGesture);
-      if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Popping into 3D…');
-      }
     } catch (error) {
       console.warn('[scene-echoes] conversion failed', error);
       this.conversion.finish();
@@ -916,18 +817,15 @@ export class SceneEchoesApp {
       this.pendingConverted = null;
       this.space.space = this.space.photoOpen ? 'photo' : this.space.explorerOpen ? 'explorer' : 'clean';
       this.audio.play('thud', origin);
-      // Keep / restore arm so the user can retry without redoing OK.
       this.okGesture.armed = true;
       this.okGesture.armedFor = 1;
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Load failed · hold the photo again to retry');
+        this.explorer.setPhotoGuide('Load failed · OK again, then pinch to retry');
       }
     }
   }
 
   private clearHandFeedback(): void {
-    this.holdProgressRing.visible = false;
-    this.explorer?.setPhotoTouchFeedback(null, 0, false);
     this.ghost.visible = false;
     this.ghost.userData.anim = undefined;
   }
