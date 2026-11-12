@@ -226,9 +226,9 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Close enough for poke or easy hand-ray aim.
-    const distance = 0.5;
-    const centerY = head.y - 0.05;
+    // Same band as Finder panels so the Quest hand target-ray can aim reliably.
+    const distance = 0.7;
+    const centerY = head.y - 0.04;
     mesh.position.set(
       head.x + forward.x * distance,
       centerY,
@@ -243,6 +243,8 @@ export class FileExplorer {
     shadow.position.copy(mesh.position);
     shadow.position.y -= 0.01;
     shadow.quaternion.copy(mesh.quaternion);
+    // Must not steal hand-ray hits from the print (was blocking pinch-to-pop).
+    shadow.raycast = () => undefined;
     const guide = new Mesh(
       new PlaneGeometry(0.42, 0.07),
       new MeshBasicMaterial({
@@ -258,7 +260,9 @@ export class FileExplorer {
     guide.translateY(-(height * 0.5 + 0.06));
     guide.translateZ(0.002);
     guide.userData.photoGuide = true;
+    guide.raycast = () => undefined;
     this.photoRestScale = 1;
+    this.photoGroup.userData.photoPrint = true;
     this.photoGroup.add(shadow, mesh, guide);
     this.photoGroup.visible = true;
     this.group.visible = false;
@@ -271,6 +275,7 @@ export class FileExplorer {
 
   closePhoto(): void {
     this.photoGroup.visible = false;
+    this.photoGroup.userData.photoPrint = false;
     this.openPhoto = null;
     this.dimOthers(null, false);
     this.group.visible = this.visible;
@@ -278,12 +283,13 @@ export class FileExplorer {
   }
 
   /**
-   * Very forgiving photo hit for Quest hands: large sphere around the print,
-   * plus a thick local slab. Prefer world distance so tip jitter still counts.
+   * Photo hit test. Default is a thick slab on the print only.
+   * Pass `spherePad` for a looser near-center fallback (avoid for pop commits).
    */
   hitOpenPhoto(
     point: { x: number; y: number; z: number },
-    pad = 0.35,
+    pad = 0.12,
+    spherePad = 0,
   ): { x: number; y: number } | null {
     const photo = this.openPhoto;
     if (!photo || !this.photoGroup.visible) return null;
@@ -292,17 +298,17 @@ export class FileExplorer {
     const size = photo.userData.photoSize as { width: number; height: number } | undefined;
     const w = size?.width ?? config.openPhotoWidth;
     const h = size?.height ?? config.openPhotoWidth * 0.75;
-    const reach = Math.max(0.38, Math.hypot(w, h) * 0.75 + 0.2);
-    const nearCenter = this.world.distanceTo(point as never) <= reach;
     const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
-    if (local.z <= 0.7 && local.z >= -0.35) {
+    if (local.z <= 0.35 && local.z >= -0.2) {
       const u = local.x / w + 0.5;
       const v = 0.5 - local.y / h;
       if (u >= -pad && u <= 1 + pad && v >= -pad && v <= 1 + pad) {
         return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
       }
     }
-    if (nearCenter) return { x: 0.5, y: 0.45 };
+    if (spherePad > 0 && this.world.distanceTo(point as never) <= spherePad) {
+      return { x: 0.5, y: 0.45 };
+    }
     return null;
   }
 

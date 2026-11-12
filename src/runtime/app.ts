@@ -433,7 +433,10 @@ export class SceneEchoesApp {
       [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
       true,
     );
-    const hit = hits.find((entry) => entry.object.visible);
+    // Prefer a real target (photo print / card / icon), not a label/shadow hitchhiker.
+    const hit =
+      hits.find((entry) => entry.object.visible && this.uiKind(entry.object)) ??
+      hits.find((entry) => entry.object.visible);
     return hit ? { object: hit.object, point: hit.point } : null;
   }
 
@@ -651,30 +654,41 @@ export class SceneEchoesApp {
         this.objects.find((item) => item.scene === 'object3d');
       if (!object) return;
 
-      // Meta menu pattern: open → release → aim ray at target → pinch.
-      // Never treat the open-card pinch (or tracking flicker) as a pop.
+      // Meta menu pattern: open → release → aim at target → pinch.
       if (!this.hands.left.pinched && !this.hands.right.pinched) {
         this.photoSawOpenHand = true;
       }
-      const settled = this.time - this.photoOpenedAt >= 0.75;
+      // If tracking never fully reports "open", unblock after a short settle.
+      const sinceOpen = this.time - this.photoOpenedAt;
+      if (sinceOpen >= 1.1) this.photoSawOpenHand = true;
+      const settled = sinceOpen >= 0.55;
       if (!settled || !this.photoSawOpenHand || this.photoPinchCooldown > 0) return;
 
+      let aiming = false;
       for (const hand of [this.hands.right, this.hands.left]) {
-        if (!hand.justPinched) continue;
-        // Strict aim: hand target-ray must hit the print (same as Quest system UI).
         const pick = this.uiPick(hand);
-        if (this.uiKind(pick?.object ?? null)?.kind !== 'photo') continue;
-
+        const rayOnPhoto = this.uiKind(pick?.object ?? null)?.kind === 'photo';
         const tip = hand.pinchPosition ?? hand.indexTip;
+        // Near-field fallback: fingertip actually on the print (tight), not a huge sphere.
+        const tipOnPhoto = tip ? this.explorer.hitOpenPhoto(tip, 0.08, 0) : null;
+        if (rayOnPhoto || tipOnPhoto) aiming = true;
+
+        if (!hand.justPinched) continue;
+        if (!rayOnPhoto && !tipOnPhoto) continue;
+
+        const uv = tipOnPhoto ?? { x: 0.5, y: 0.45 };
         const origin = tip
           ? new Vector3(tip.x, tip.y, tip.z)
           : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
-        const uv = tip ? this.explorer.hitOpenPhoto(tip, 0.2) ?? { x: 0.5, y: 0.45 } : { x: 0.5, y: 0.45 };
         this.photoPinchCooldown = 1.0;
         this.audio.play('click', origin);
+        this.explorer.setPhotoGuide('Loading 3D model…');
         void this.beginConversion(object.id, origin, false, uv);
         return;
       }
+      this.explorer.setPhotoGuide(
+        aiming ? 'Pinch now to pop into 3D' : 'Point at the photo · pinch to pop into 3D',
+      );
       return;
     }
     this.updateSceneHold(input);
