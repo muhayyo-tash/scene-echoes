@@ -117,10 +117,10 @@ drew cyan `EdgesGeometry` stubs, scan bars, particles, and scene-capture
 rectangles lingered in the room. Conversion wait UX is now a soft white ring
 only; no cyan wireframes.
 
-## Photo pop uses Meta-style point + pinch
+## Photo pop uses Meta-style point + pinch-and-hold
 
 Quest system menus use **hand target-ray aim, then pinch**. Meta’s WebXR Hands
-docs: regular pinch is the **emulated Gamepad button 0** on the hand input
-source (not a custom tip-distance guess). Scene Echoes reads
-`inputSource.gamepad.buttons[0].pressed` for pinch, aims with the hand
-target-ray, and only then commits the pop. Tip proximity never starts a load.
+docs: regular pinch is **select / Gamepad button 0**. Scene Echoes commits a
+photo pop only when the hand **target-ray** stays on the print **and** platform
+select is held ~150 ms. Tip-distance pinch (used for Finder cards) never starts
+a load. Casual hand motion alone cannot trigger loading.

@@ -29,7 +29,7 @@ describe('pointer ray', () => {
     expect(hands.right.justPinched).toBe(false);
   });
 
-  it('accepts Meta select even when tips are not yet touching', () => {
+  it('tracks justSelected separately from tip-distance pinch', () => {
     const hands = createHands();
     const open = sampleFromJoints('right', {
       wrist: { x: 0, y: 1, z: 0 },
@@ -39,12 +39,14 @@ describe('pointer ray', () => {
     open.selectPressed = false;
     open.selectValue = 0.2;
     updateHandRuntime(hands.right, open, 0.016, 1, false, true, false, false);
-    expect(hands.right.pinched).toBe(false);
+    expect(hands.right.selectPressed).toBe(false);
+    expect(hands.right.justSelected).toBe(false);
 
     const select = { ...open, selectPressed: true, selectValue: 1 };
     updateHandRuntime(hands.right, select, 0.016, 1, false, true, false, false);
+    expect(hands.right.selectPressed).toBe(true);
+    expect(hands.right.justSelected).toBe(true);
     expect(hands.right.pinched).toBe(true);
-    expect(hands.right.justPinched).toBe(true);
   });
 
   it('still pinches from tight tip contact when select is false', () => {
@@ -59,5 +61,7 @@ describe('pointer ray', () => {
     updateHandRuntime(hands.right, near, 0.016, 1, false, true, false, false);
     expect(hands.right.pinched).toBe(true);
     expect(hands.right.justPinched).toBe(true);
+    expect(hands.right.selectPressed).toBe(false);
+    expect(hands.right.justSelected).toBe(false);
   });
 });

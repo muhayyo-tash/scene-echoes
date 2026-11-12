@@ -240,9 +240,9 @@ export class FileExplorer {
     );
     mesh.lookAt(head.x, centerY, head.z);
     mesh.rotateX((-config.openPhotoTiltDegrees * Math.PI) / 180);
-    // Invisible larger hit plate — thin photo alone is easy for hand rays to miss.
+    // Slightly larger hit plate for aim — keep modest so casual pointing does not stick.
     const hitPlate = new Mesh(
-      new PlaneGeometry(width * 1.35, height * 1.35),
+      new PlaneGeometry(width * 1.12, height * 1.12),
       new MeshBasicMaterial({ visible: false, side: DoubleSide }),
     );
     hitPlate.position.copy(mesh.position);

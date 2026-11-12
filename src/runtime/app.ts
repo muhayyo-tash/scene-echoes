@@ -156,6 +156,8 @@ export class SceneEchoesApp {
   private photoOpenedAt = -999;
   /** User must fully release the hand after opening the photo before a pop pinch counts. */
   private photoSawOpenHand = false;
+  /** Seconds the platform select has been held while the hand ray stays on the print. */
+  private photoSelectHold = 0;
   private desktopHold: {
     x: number;
     y: number;
@@ -630,7 +632,8 @@ export class SceneEchoesApp {
       // The pinch that opened this card must not also pop it.
       this.photoOpenedAt = this.time;
       this.photoSawOpenHand = false;
-      this.photoPinchCooldown = 0.45;
+      this.photoPinchCooldown = 0.7;
+      this.photoSelectHold = 0;
       this.explorer.setPhotoGuide('Release · then point at the photo');
       this.hintPlayed.pinch = true;
       this.ghost.visible = false;
@@ -643,18 +646,10 @@ export class SceneEchoesApp {
   }
 
   /**
-   * Aim for open-photo pop: Meta point-and-pinch uses the hand target-ray.
-   * Tip proximity is feedback only — never enough alone to commit a load.
+   * Aim for open-photo pop: only the Meta hand target-ray counts for commit.
+   * Tip proximity is guide feedback only.
    */
-  private photoAim(
-    hand: {
-      rayOrigin: { x: number; y: number; z: number } | null;
-      rayDirection: { x: number; y: number; z: number } | null;
-      indexTip: { x: number; y: number; z: number } | null;
-      wrist: { x: number; y: number; z: number } | null;
-      pinchPosition: { x: number; y: number; z: number } | null;
-    },
-  ): {
+  private photoAim(hand: HandRuntime): {
     rayOnPhoto: boolean;
     tipNear: boolean;
     uv: { x: number; y: number };
@@ -664,28 +659,8 @@ export class SceneEchoesApp {
     if (this.uiKind(pick?.object ?? null)?.kind === 'photo' && pick) {
       return { rayOnPhoto: true, tipNear: false, uv: { x: 0.5, y: 0.45 }, point: pick.point };
     }
-    // Fallback ray: wrist → index (near-field when target-ray is unreliable).
-    if (hand.wrist && hand.indexTip) {
-      this.uiOrigin.set(hand.wrist.x, hand.wrist.y, hand.wrist.z);
-      this.uiDir
-        .set(
-          hand.indexTip.x - hand.wrist.x,
-          hand.indexTip.y - hand.wrist.y,
-          hand.indexTip.z - hand.wrist.z,
-        )
-        .normalize();
-      if (this.uiDir.lengthSq() > 1e-6) {
-        this.uiRaycaster.set(this.uiOrigin, this.uiDir);
-        this.uiRaycaster.far = 2.5;
-        const hits = this.uiRaycaster.intersectObject(this.explorer.photoGroup, true);
-        const hit = hits.find((entry) => this.uiKind(entry.object)?.kind === 'photo');
-        if (hit) {
-          return { rayOnPhoto: true, tipNear: false, uv: { x: 0.5, y: 0.45 }, point: hit.point };
-        }
-      }
-    }
     const tip = hand.indexTip;
-    const tipHit = tip ? this.explorer.hitOpenPhoto(tip, 0.1, 0) : null;
+    const tipHit = tip ? this.explorer.hitOpenPhoto(tip, 0.08, 0) : null;
     return {
       rayOnPhoto: false,
       tipNear: Boolean(tipHit),
@@ -737,55 +712,64 @@ export class SceneEchoesApp {
         return;
       }
 
-      // Meta menu pattern: open → release → aim at target → pinch.
-      if (!this.hands.left.pinched && !this.hands.right.pinched) {
-        this.photoSawOpenHand = true;
-      }
+      // Must fully release after opening the card (no auto-unblock from a timer).
+      const leftOpen = !this.hands.left.selectPressed && !this.hands.left.pinched;
+      const rightOpen = !this.hands.right.selectPressed && !this.hands.right.pinched;
+      if (leftOpen && rightOpen) this.photoSawOpenHand = true;
+
       const sinceOpen = this.time - this.photoOpenedAt;
-      // Tracking sometimes never reports a clean open; unblock shortly after settle.
-      if (sinceOpen >= 0.85) this.photoSawOpenHand = true;
-      const settled = sinceOpen >= 0.4;
+      const settled = sinceOpen >= 0.55;
       const ready =
         settled && this.photoSawOpenHand && this.photoPinchCooldown <= 0;
 
       let aiming = false;
-      let commit: {
-        hand: HandRuntime;
-        uv: { x: number; y: number };
-        point: Vector3 | null;
-      } | null = null;
+      let holdHand: HandRuntime | null = null;
+      let holdUv = { x: 0.5, y: 0.45 };
+      let holdPoint: Vector3 | null = null;
       for (const hand of [this.hands.right, this.hands.left]) {
         const aim = this.photoAim(hand);
-        if (aim.rayOnPhoto || aim.tipNear) aiming = true;
-        // Commit only on platform pinch (gamepad select) + ray on the print.
-        // Tip near alone must not start a load (casual hand motion).
-        if (hand.justPinched && aim.rayOnPhoto) {
-          commit = { hand, uv: aim.uv, point: aim.point };
+        if (aim.rayOnPhoto) aiming = true;
+        // Deliberate Meta select held on the print — tip-distance pinch never commits.
+        if (hand.selectPressed && aim.rayOnPhoto) {
+          holdHand = hand;
+          holdUv = aim.uv;
+          holdPoint = aim.point;
         }
+      }
+
+      if (!ready || !holdHand) {
+        this.photoSelectHold = 0;
+      } else {
+        this.photoSelectHold += dt;
       }
 
       if (!settled || this.photoPinchCooldown > 0) {
         this.explorer.setPhotoGuide('Release · then point at the photo');
       } else if (!this.photoSawOpenHand) {
         this.explorer.setPhotoGuide('Open your hand · then point at the photo');
+      } else if (this.photoSelectHold > 0 && this.photoSelectHold < 0.15) {
+        this.explorer.setPhotoGuide('Keep pinching…');
       } else if (aiming) {
-        this.explorer.setPhotoGuide('Pinch thumb + index to pop into 3D');
+        this.explorer.setPhotoGuide('Pinch and hold on the photo');
       } else {
-        this.explorer.setPhotoGuide('Point at the photo · then pinch');
+        this.explorer.setPhotoGuide('Point at the photo · then pinch and hold');
       }
 
-      if (!ready || !commit) return;
+      // ~150ms held select while aiming — filters one-frame flickers / casual motion.
+      if (!ready || !holdHand || this.photoSelectHold < 0.15) return;
 
-      const tip = commit.hand.pinchPosition ?? commit.hand.indexTip;
+      const tip = holdHand.pinchPosition ?? holdHand.indexTip;
       const origin = tip
         ? new Vector3(tip.x, tip.y, tip.z)
-        : commit.point?.clone() ?? photo.getWorldPosition(new Vector3());
-      this.photoPinchCooldown = 1.0;
+        : holdPoint?.clone() ?? photo.getWorldPosition(new Vector3());
+      this.photoPinchCooldown = 1.2;
+      this.photoSelectHold = 0;
       this.audio.play('click', origin);
       this.explorer.setPhotoGuide('Loading 3D model…');
-      void this.beginConversion(object.id, origin, false, commit.uv);
+      void this.beginConversion(object.id, origin, false, holdUv);
       return;
     }
+    this.photoSelectHold = 0;
     this.updateSceneHold(input);
   }
 

@@ -41,6 +41,10 @@ export interface HandRuntime {
   /** Latest joint map for custom gestures (OK unlock, etc.). */
   joints: Partial<Record<string, Vec3>>;
   justPinched: boolean;
+  /** True while Meta select / gamepad button 0 is down (not tip-distance). */
+  selectPressed: boolean;
+  /** Rising edge of selectPressed — use for deliberate UI commits. */
+  justSelected: boolean;
   velocity: Vec3;
   open: boolean;
   longPress: LongPressState;
@@ -73,6 +77,8 @@ function emptyHand(handedness: 'left' | 'right'): HandRuntime {
     rayDirection: null,
     joints: {},
     justPinched: false,
+    selectPressed: false,
+    justSelected: false,
     velocity: { x: 0, y: 0, z: 0 },
     open: false,
     longPress: createLongPressState(),
@@ -113,6 +119,8 @@ export function updateHandRuntime(
     hand.rayDirection = null;
     hand.joints = {};
     hand.justPinched = false;
+    hand.selectPressed = false;
+    hand.justSelected = false;
     return null;
   }
   hand.lost = false;
@@ -140,15 +148,18 @@ export function updateHandRuntime(
   const dist =
     sample.thumbTip && sample.indexTip ? distance3(sample.thumbTip, sample.indexTip) : 1;
   const wasPinched = hand.pinched;
-  // Meta: selectstart / gamepad button 0. Also keep tight tip-contact so Finder
-  // still opens if a frame misses the gamepad poll (tips must nearly touch).
+  const wasSelected = hand.selectPressed;
+  // Platform select (Meta gamepad / selectstart) — separate from tip distance.
+  hand.selectPressed = sample.selectPressed === true;
+  hand.justSelected = hand.selectPressed && !wasSelected;
+  // Tip-contact still drives Finder pinch; photo-pop uses justSelected only.
   const tipPinched = updatePinch(
     hand.pinch,
     dist,
     config.pinchOnDistance,
     config.pinchOffDistance,
   );
-  hand.pinched = Boolean(sample.selectPressed) || tipPinched;
+  hand.pinched = hand.selectPressed || tipPinched;
   hand.pinch.pinched = hand.pinched;
   hand.justPinched = hand.pinched && !wasPinched;
   hand.pinchPosition =
