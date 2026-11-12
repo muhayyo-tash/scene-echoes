@@ -1311,7 +1311,7 @@ export class SceneEchoesApp {
       return;
     }
     if (hold.kind === 'folder' && hold.folder) {
-      this.explorer.setFolder(hold.folder);
+      this.selectFolder(hold.folder);
       return;
     }
     if (hold.kind === 'card' && hold.cardId && hold.cardType) {
