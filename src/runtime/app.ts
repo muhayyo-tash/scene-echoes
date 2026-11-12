@@ -65,14 +65,6 @@ import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
 import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
 import { SceneCapture } from '../core/scene-capture.js';
-import {
-  canCommitOkPop,
-  consumeOkArm,
-  createOkGestureState,
-  isOkHandPose,
-  updateOkGesture,
-  type OkGestureState,
-} from '../core/ok-gesture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
 import { createModelSource, createFilmProcessing, type LiveFilmResult } from '../conversion/source.js';
@@ -157,19 +149,8 @@ export class SceneEchoesApp {
   private uiDir = new Vector3();
   private desktopPointer = new Vector2();
   private seatPressed: PlacedObject | null = null;
-  private photoHold: {
-    hand: 'left' | 'right' | null;
-    elapsed: number;
-    origin: { x: number; y: number; z: number } | null;
-    uv: { x: number; y: number } | null;
-    contacted: boolean;
-    lastTick: number;
-    /** Seconds since last valid contact — absorbs Quest tracking dropouts. */
-    lost: number;
-  } = { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
-  /** OK-hand unlock — required before any pop-out long-press. */
-  private okGesture: OkGestureState = createOkGestureState();
-  private okArmedHintAt = 0;
+  /** Prevents double-fire from the same pinch burst (Meta-style debounce). */
+  private photoPinchCooldown = 0;
   private desktopHold: {
     x: number;
     y: number;
@@ -330,7 +311,7 @@ export class SceneEchoesApp {
     );
     this.hands.slide = slideL ?? slideR;
     this.hands.anyPinch = this.hands.left.pinched || this.hands.right.pinched;
-    this.updateOkUnlock(dt, input);
+    if (this.photoPinchCooldown > 0) this.photoPinchCooldown = Math.max(0, this.photoPinchCooldown - dt);
     const lowest = [input.left?.wrist?.y, input.right?.wrist?.y].filter((n): n is number => n !== undefined);
     maybeDefaultFloor(
       this.surfaces,
@@ -644,14 +625,10 @@ export class SceneEchoesApp {
         this.conversion.finish();
         this.converting = false;
         this.convertingSince = 0;
-        this.okGesture.armed = true;
-        this.okGesture.armedFor = 1;
-        this.okGesture.ready = true;
-        this.okGesture.readyFor = 1;
         this.space.space = this.space.photoOpen ? 'photo' : 'clean';
         this.audio.play('thud');
         if (this.space.photoOpen) {
-          this.explorer.setPhotoGuide('Load timed out · pinch again to retry');
+          this.explorer.setPhotoGuide('Load timed out · point at photo and pinch again');
         }
       }
       return;
@@ -663,84 +640,47 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      // Strict sequence: OK → release → pinch. Never start load during the OK pose.
-      if (!canCommitOkPop(this.okGesture)) {
-        this.photoHold = emptyPhotoHold();
-        if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
-          void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
-        }
-        return;
-      }
-
       if (!object) return;
 
+      // Meta Quest menu pattern: aim (hand ray / near tip) at the photo, then pinch.
+      // Do not fire on random hand motion — only justPinched while targeting the print.
+      if (this.photoPinchCooldown > 0) return;
       for (const hand of [this.hands.right, this.hands.left]) {
         if (!hand.justPinched) continue;
-        if (isOkHandPose(hand.joints)) continue;
+        const pick = this.uiPick(hand);
+        const kind = this.uiKind(pick?.object ?? null);
         const tip = hand.pinchPosition ?? hand.indexTip;
-        const uv = (tip ? this.explorer.hitOpenPhoto(tip, 0.55) : null) ?? { x: 0.5, y: 0.45 };
+        const tipUv = tip ? this.explorer.hitOpenPhoto(tip, 0.28) : null;
+        const aimed = kind?.kind === 'photo' || Boolean(tipUv);
+        if (!aimed) continue;
+
+        const uv = tipUv ?? { x: 0.5, y: 0.45 };
         const origin = tip
           ? new Vector3(tip.x, tip.y, tip.z)
-          : photo.getWorldPosition(new Vector3());
+          : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
+        this.photoPinchCooldown = 0.8;
         this.audio.play('click', origin);
-        this.photoHold = emptyPhotoHold();
         void this.beginConversion(object.id, origin, false, uv);
         return;
       }
-      return;
-    }
-    this.photoHold = emptyPhotoHold();
-    this.updateSceneHold(input);
-  }
-
-  private updateOkUnlock(dt: number, _input: FrameInput): void {
-    // Flat desktop preview has no hand joints — keep pop armed+ready for click-hold.
-    if (this.desktop) {
-      this.okGesture.armed = true;
-      this.okGesture.ready = true;
-      this.okGesture.readyFor = 1;
-      return;
-    }
-    const posing =
-      [this.hands.right, this.hands.left]
-        .filter((hand) => hand.tracked)
-        .map((hand) => hand.joints)
-        .find((joints) => isOkHandPose(joints)) ?? null;
-    const { justArmed, justReady } = updateOkGesture(this.okGesture, posing, dt);
-    if (justArmed) {
-      this.audio.play('chime');
-      this.okArmedHintAt = this.time;
-      if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('OK locked · open your hand, then pinch the photo');
+      if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds) {
+        void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
       }
-    } else if (justReady && this.space.photoOpen) {
-      this.audio.play('tick');
-      this.explorer.setPhotoGuide('Ready · pinch the photo to pop into 3D');
-    } else if (
-      this.space.photoOpen &&
-      !this.okGesture.armed &&
-      this.okArmedHintAt > 0 &&
-      this.time - this.okArmedHintAt > 0.2
-    ) {
-      this.explorer.setPhotoGuide('OK gesture first · release · then pinch the photo');
-      this.okArmedHintAt = 0;
+      return;
     }
+    this.updateSceneHold(input);
   }
 
   private updateSceneHold(input: FrameInput): void {
     if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen) return;
-    // Must unlock with OK, then release it, then long-press (not the same pose).
-    if (!this.okGesture.armed || this.okGesture.armedFor < 0.3) return;
     for (const hand of [this.hands.left, this.hands.right]) {
       if (!hand.longPress.fired) continue;
-      if (isOkHandPose(hand.joints)) continue;
       const tip = hand.pinchPosition ?? hand.indexTip;
       if (tip && this.explorer.hitIcon(tip, 0.12)) continue;
       const origin = tip
         ? new Vector3(tip.x, tip.y, tip.z)
         : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
       hand.longPress.fired = false;
-      if (!consumeOkArm(this.okGesture)) return;
       void this.beginSceneCapture(origin);
       return;
     }
@@ -817,7 +757,6 @@ export class SceneEchoesApp {
       this.conversion.attachModel(model);
       this.conversionElapsed = 0;
       this.pendingConverted = { object: handle.object, model, origin };
-      consumeOkArm(this.okGesture);
     } catch (error) {
       console.warn('[scene-echoes] conversion failed', error);
       this.conversion.finish();
@@ -825,12 +764,8 @@ export class SceneEchoesApp {
       this.pendingConverted = null;
       this.space.space = this.space.photoOpen ? 'photo' : this.space.explorerOpen ? 'explorer' : 'clean';
       this.audio.play('thud', origin);
-      this.okGesture.armed = true;
-      this.okGesture.armedFor = 1;
-      this.okGesture.ready = true;
-      this.okGesture.readyFor = 1;
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Load failed · pinch again to retry');
+        this.explorer.setPhotoGuide('Load failed · point at photo and pinch again');
       }
     }
   }
@@ -1126,15 +1061,12 @@ export class SceneEchoesApp {
 
   private updateBookHold(input: FrameInput): void {
     if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen || this.converting) return;
-    if (!this.okGesture.armed || this.okGesture.armedFor < 0.3) return;
     const floorY = floorHeight(this.surfaces.surfaces);
     for (const hand of [this.hands.left, this.hands.right]) {
       if (!hand.surfaceHold.fired || !hand.indexTip) continue;
-      if (isOkHandPose(hand.joints)) continue;
       const near = fingertipNearSurface(hand.indexTip, this.surfaces.surfaces);
       if (!near || !isElevatedSurface(near.surface, floorY, config.bookTableAboveFloor)) continue;
       hand.surfaceHold.fired = false;
-      if (!consumeOkArm(this.okGesture)) return;
       void this.beginSceneCapture(new Vector3(hand.indexTip.x, hand.indexTip.y, hand.indexTip.z));
       return;
     }
@@ -1456,18 +1388,6 @@ function handHorizontalYaw(
     return Math.atan2(dir.x, dir.z);
   }
   return Math.atan2(pinch.x - objectPos.x, pinch.z - objectPos.z);
-}
-
-function emptyPhotoHold(): {
-  hand: 'left' | 'right' | null;
-  elapsed: number;
-  origin: { x: number; y: number; z: number } | null;
-  uv: { x: number; y: number } | null;
-  contacted: boolean;
-  lastTick: number;
-  lost: number;
-} {
-  return { hand: null, elapsed: 0, origin: null, uv: null, contacted: false, lastTick: 0, lost: 0 };
 }
 
 function worldToPhotoUv(

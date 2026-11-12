@@ -247,7 +247,7 @@ export class FileExplorer {
       new PlaneGeometry(0.42, 0.07),
       new MeshBasicMaterial({
         map: new CanvasTexture(
-          makeGuidanceCanvas('OK · release · pinch the photo to pop into 3D'),
+          makeGuidanceCanvas('Point at the photo · pinch to pop into 3D'),
         ),
         transparent: true,
         depthWrite: false,

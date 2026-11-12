@@ -117,12 +117,9 @@ drew cyan `EdgesGeometry` stubs, scan bars, particles, and scene-capture
 rectangles lingered in the room. Conversion wait UX is now a soft white ring
 only; no cyan wireframes.
 
-## Pop-out requires a custom OK-hand unlock
+## Photo pop uses Meta-style point + pinch
 
-Accidental long-presses and unreliable thin-plane poke tests made “hold the
-photo” feel broken. Pop-out is now a two-step product gesture:
-
-1. Show the one-hand **OK** pose (thumb+index ring, other fingers up) to arm.
-2. Then index long-press the target.
-
-Without the OK unlock, long-press does nothing.
+Quest system menus feel reliable because they use **hand target-ray aim, then
+pinch** — not free-floating long-press or custom OK poses. Scene Echoes matches
+that: with the photo open, the hand ray (or near tip) must hit the print, then
+`justPinched` commits the pop. Casual hand motion alone does not start a load.
