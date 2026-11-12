@@ -52,6 +52,16 @@ export function samplesFromFrame(
       sample.rayOrigin = ray.origin;
       sample.rayDirection = ray.direction;
     }
+    // Meta WebXR Hands: regular pinch = emulated Gamepad button 0 (not tip distance).
+    // Quest Browser applies its own press/release hysteresis (~0.9 / ~0.7 strength).
+    const btn = source.gamepad?.buttons?.[0];
+    if (btn) {
+      sample.selectValue = typeof btn.value === 'number' ? btn.value : btn.pressed ? 1 : 0;
+      sample.selectPressed = Boolean(btn.pressed);
+    } else {
+      sample.selectPressed = null;
+      sample.selectValue = null;
+    }
     if (handedness === 'left') left = sample;
     else right = sample;
   }

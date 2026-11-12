@@ -3,8 +3,9 @@ export type ConversionMode = 'manifest' | 'live';
 export const CONVERSION_API_PLACEHOLDER = 'https://example.invalid';
 
 const numericDefaults = {
-  pinchOnDistance: 0.035,
-  pinchOffDistance: 0.055,
+  /** Desktop / no-gamepad fallback only. Quest uses gamepad button 0. Tips nearly touch. */
+  pinchOnDistance: 0.018,
+  pinchOffDistance: 0.032,
   longPressSeconds: 0.3,
   longPressMoveTolerance: 0.18,
   pokeDepth: 0.015,

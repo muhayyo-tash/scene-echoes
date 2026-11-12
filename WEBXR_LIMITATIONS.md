@@ -119,7 +119,8 @@ only; no cyan wireframes.
 
 ## Photo pop uses Meta-style point + pinch
 
-Quest system menus feel reliable because they use **hand target-ray aim, then
-pinch** — not free-floating long-press or custom OK poses. Scene Echoes matches
-that: with the photo open, the hand ray (or near tip) must hit the print, then
-`justPinched` commits the pop. Casual hand motion alone does not start a load.
+Quest system menus use **hand target-ray aim, then pinch**. Meta’s WebXR Hands
+docs: regular pinch is the **emulated Gamepad button 0** on the hand input
+source (not a custom tip-distance guess). Scene Echoes reads
+`inputSource.gamepad.buttons[0].pressed` for pinch, aims with the hand
+target-ray, and only then commits the pop. Tip proximity never starts a load.

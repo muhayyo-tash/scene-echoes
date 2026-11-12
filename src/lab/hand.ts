@@ -34,6 +34,8 @@ export class SimulatedHand {
       wrist: p,
       rayOrigin: p,
       rayDirection: { x: 0, y: 0, z: -1 },
+      selectPressed: this.pinch,
+      selectValue: this.pinch ? 1 : 0,
     };
   }
 }

@@ -9,7 +9,7 @@ describe('pointer ray', () => {
     expect(ray.direction.z).toBeLessThan(-0.99);
   });
 
-  it('fires justPinched on the frame a pinch starts', () => {
+  it('fires justPinched on the frame a pinch starts (distance fallback)', () => {
     const hands = createHands();
     const open = sampleFromJoints('right', {
       wrist: { x: 0, y: 1, z: 0 },
@@ -27,5 +27,24 @@ describe('pointer ray', () => {
     expect(hands.right.justPinched).toBe(true);
     updateHandRuntime(hands.right, pinched, 0.016, 1, false, true, false, false);
     expect(hands.right.justPinched).toBe(false);
+  });
+
+  it('prefers Meta gamepad select over tip distance', () => {
+    const hands = createHands();
+    const near = sampleFromJoints('right', {
+      wrist: { x: 0, y: 1, z: 0 },
+      'index-finger-tip': { x: 0.01, y: 1, z: 0 },
+      'thumb-tip': { x: 0, y: 1, z: 0 },
+    });
+    near.selectPressed = false;
+    near.selectValue = 0.2;
+    updateHandRuntime(hands.right, near, 0.016, 1, false, true, false, false);
+    expect(hands.right.pinched).toBe(false);
+    expect(hands.right.justPinched).toBe(false);
+
+    const select = { ...near, selectPressed: true, selectValue: 1 };
+    updateHandRuntime(hands.right, select, 0.016, 1, false, true, false, false);
+    expect(hands.right.pinched).toBe(true);
+    expect(hands.right.justPinched).toBe(true);
   });
 });

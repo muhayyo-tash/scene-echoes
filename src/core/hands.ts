@@ -16,6 +16,13 @@ export interface HandSample {
   wrist: Vec3 | null;
   rayOrigin: Vec3 | null;
   rayDirection: Vec3 | null;
+  /**
+   * Meta Quest WebXR exposes regular pinch as emulated Gamepad button 0
+   * (see developers.meta.com WebXR Hands). Prefer this over tip distance.
+   */
+  selectPressed: boolean | null;
+  /** Analog pinch strength 0–1 when the runtime reports gamepad.value. */
+  selectValue: number | null;
 }
 
 export interface HandRuntime {
@@ -133,13 +140,19 @@ export function updateHandRuntime(
   const dist =
     sample.thumbTip && sample.indexTip ? distance3(sample.thumbTip, sample.indexTip) : 1;
   const wasPinched = hand.pinched;
-  hand.pinched = updatePinch(hand.pinch, dist, config.pinchOnDistance, config.pinchOffDistance);
+  // Official Meta path: gamepad button 0 / select. Distance is only a desktop fallback.
+  if (sample.selectPressed !== null) {
+    hand.pinched = sample.selectPressed;
+    hand.pinch.pinched = sample.selectPressed;
+  } else {
+    hand.pinched = updatePinch(hand.pinch, dist, config.pinchOnDistance, config.pinchOffDistance);
+  }
   hand.justPinched = hand.pinched && !wasPinched;
   hand.pinchPosition =
     hand.pinched && sample.thumbTip && sample.indexTip
       ? pinchMidpoint(sample.thumbTip, sample.indexTip)
       : null;
-  hand.open = !hand.pinched && dist > config.pinchOffDistance;
+  hand.open = !hand.pinched && (sample.selectPressed === null ? dist > config.pinchOffDistance : true);
   if (hand.pinchPosition) {
     updateLongPress(
       hand.longPress,
@@ -218,6 +231,8 @@ export function sampleFromJoints(
     wrist,
     rayOrigin: null,
     rayDirection: null,
+    selectPressed: null,
+    selectValue: null,
   };
 }
 

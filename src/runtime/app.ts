@@ -615,7 +615,10 @@ export class SceneEchoesApp {
     this.ghost.userData.anim = undefined;
   }
 
-  /** Aim helpers for open-photo pop: target-ray, tip→ray fallback, tip slab. */
+  /**
+   * Aim for open-photo pop: Meta point-and-pinch uses the hand target-ray.
+   * Tip proximity is feedback only — never enough alone to commit a load.
+   */
   private photoAim(
     hand: {
       rayOrigin: { x: number; y: number; z: number } | null;
@@ -624,12 +627,17 @@ export class SceneEchoesApp {
       wrist: { x: number; y: number; z: number } | null;
       pinchPosition: { x: number; y: number; z: number } | null;
     },
-  ): { onPhoto: boolean; uv: { x: number; y: number }; point: Vector3 | null } {
+  ): {
+    rayOnPhoto: boolean;
+    tipNear: boolean;
+    uv: { x: number; y: number };
+    point: Vector3 | null;
+  } {
     const pick = this.uiPick(hand);
     if (this.uiKind(pick?.object ?? null)?.kind === 'photo' && pick) {
-      return { onPhoto: true, uv: { x: 0.5, y: 0.45 }, point: pick.point };
+      return { rayOnPhoto: true, tipNear: false, uv: { x: 0.5, y: 0.45 }, point: pick.point };
     }
-    // Fallback ray: wrist → index tip (works when target-ray misses near field).
+    // Fallback ray: wrist → index (near-field when target-ray is unreliable).
     if (hand.wrist && hand.indexTip) {
       this.uiOrigin.set(hand.wrist.x, hand.wrist.y, hand.wrist.z);
       this.uiDir
@@ -644,20 +652,19 @@ export class SceneEchoesApp {
         this.uiRaycaster.far = 2.5;
         const hits = this.uiRaycaster.intersectObject(this.explorer.photoGroup, true);
         const hit = hits.find((entry) => this.uiKind(entry.object)?.kind === 'photo');
-        if (hit) return { onPhoto: true, uv: { x: 0.5, y: 0.45 }, point: hit.point };
+        if (hit) {
+          return { rayOnPhoto: true, tipNear: false, uv: { x: 0.5, y: 0.45 }, point: hit.point };
+        }
       }
     }
-    const tip = hand.pinchPosition ?? hand.indexTip;
-    // Moderate tip volume — open→release→settle already blocks the open-card pinch.
-    const tipHit = tip ? this.explorer.hitOpenPhoto(tip, 0.2, 0.22) : null;
-    if (tipHit && tip) {
-      return {
-        onPhoto: true,
-        uv: tipHit,
-        point: new Vector3(tip.x, tip.y, tip.z),
-      };
-    }
-    return { onPhoto: false, uv: { x: 0.5, y: 0.45 }, point: null };
+    const tip = hand.indexTip;
+    const tipHit = tip ? this.explorer.hitOpenPhoto(tip, 0.1, 0) : null;
+    return {
+      rayOnPhoto: false,
+      tipNear: Boolean(tipHit),
+      uv: tipHit ?? { x: 0.5, y: 0.45 },
+      point: tipHit && tip ? new Vector3(tip.x, tip.y, tip.z) : null,
+    };
   }
 
   private updateConversion(dt: number, input: FrameInput): void {
@@ -722,21 +729,22 @@ export class SceneEchoesApp {
       } | null = null;
       for (const hand of [this.hands.right, this.hands.left]) {
         const aim = this.photoAim(hand);
-        if (aim.onPhoto) aiming = true;
-        if (hand.justPinched && aim.onPhoto) {
+        if (aim.rayOnPhoto || aim.tipNear) aiming = true;
+        // Commit only on platform pinch (gamepad select) + ray on the print.
+        // Tip near alone must not start a load (casual hand motion).
+        if (hand.justPinched && aim.rayOnPhoto) {
           commit = { hand, uv: aim.uv, point: aim.point };
         }
       }
 
-      // Always refresh guide — previous early-returns made the label look frozen.
       if (!settled || this.photoPinchCooldown > 0) {
         this.explorer.setPhotoGuide('Release · then point at the photo');
       } else if (!this.photoSawOpenHand) {
         this.explorer.setPhotoGuide('Open your hand · then point at the photo');
       } else if (aiming) {
-        this.explorer.setPhotoGuide('Pinch now to pop into 3D');
+        this.explorer.setPhotoGuide('Pinch thumb + index to pop into 3D');
       } else {
-        this.explorer.setPhotoGuide('Point at the photo · pinch to pop into 3D');
+        this.explorer.setPhotoGuide('Point at the photo · then pinch');
       }
 
       if (!ready || !commit) return;
