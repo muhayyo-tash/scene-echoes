@@ -45,7 +45,7 @@ export function updateOkGesture(
   joints: Partial<Record<string, Vec3>> | null,
   dt: number,
   armHoldSeconds = 0.35,
-  armedMemorySeconds = 12,
+  armedMemorySeconds = 20,
 ): { justArmed: boolean } {
   let justArmed = false;
   if (state.armed) {

@@ -139,6 +139,7 @@ export class SceneEchoesApp {
   activeFilmId: string | null = null;
   converting = false;
   conversionElapsed = 0;
+  private convertingSince = 0;
   sceneCapture = new SceneCapture();
   private sceneCaptureBusy = false;
   pendingConverted: { object: ManifestObject; model: Group; origin: Vector3 } | null = null;
@@ -463,7 +464,7 @@ export class SceneEchoesApp {
   }
 
   private uiKind(object: Object3D | null): {
-    kind: 'icon' | 'close' | 'folder' | 'card';
+    kind: 'icon' | 'close' | 'folder' | 'card' | 'photo';
     folder?: FinderSection;
     cardId?: string;
   } | null {
@@ -474,11 +475,13 @@ export class SceneEchoesApp {
         close?: boolean;
         folder?: FinderSection;
         cardId?: string;
+        photoPrint?: boolean;
       };
       if (data.appIcon) return { kind: 'icon' };
       if (data.close) return { kind: 'close' };
       if (data.folder) return { kind: 'folder', folder: data.folder };
       if (data.cardId) return { kind: 'card', cardId: data.cardId };
+      if (data.photoPrint) return { kind: 'photo' };
       current = current.parent;
     }
     return null;
@@ -640,19 +643,33 @@ export class SceneEchoesApp {
       return;
     }
     if (this.converting) {
+      this.convertingSince += dt;
       this.clearHandFeedback();
       // Stay in the soft "waiting" band — never the old blue build wire phase.
       this.conversion.update(0.06 + (Math.sin(this.time * 2.2) * 0.5 + 0.5) * 0.1);
+      // Unstick if a load hung (Quest Wi-Fi / GLB fetch).
+      if (!this.pendingConverted && this.convertingSince > 40) {
+        console.warn('[scene-echoes] conversion timed out');
+        this.conversion.finish();
+        this.converting = false;
+        this.convertingSince = 0;
+        this.okGesture.armed = true;
+        this.okGesture.armedFor = 1;
+        this.space.space = this.space.photoOpen ? 'photo' : 'clean';
+        this.audio.play('thud');
+      }
       return;
     }
+    this.convertingSince = 0;
     if (this.space.photoOpen && this.explorer.openPhoto) {
       const photo = this.explorer.openPhoto;
       const objectId = (photo.userData.objectId as string | undefined) ?? null;
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      // Pop requires OK unlock, then aim/hold at the photo (tip or hand ray).
-      if (!this.okGesture.armed || this.okGesture.armedFor < 0.2) {
+      // Pop requires OK unlock first. Commit with the same pinch that already
+      // opens Finder cards — Quest poke hit tests were never reliable here.
+      if (!this.okGesture.armed || this.okGesture.armedFor < 0.15) {
         this.photoHold = emptyPhotoHold();
         this.holdProgressRing.visible = false;
         this.explorer.setPhotoTouchFeedback(null, 0, false);
@@ -662,41 +679,44 @@ export class SceneEchoesApp {
         return;
       }
 
+      if (!object) return;
+
+      // Primary: after OK, pinch while aiming at / near the open photo.
+      for (const hand of [this.hands.right, this.hands.left]) {
+        if (!hand.justPinched) continue;
+        const pick = this.uiPick(hand);
+        const kind = this.uiKind(pick?.object ?? null);
+        const tip = hand.pinchPosition ?? hand.indexTip;
+        const near =
+          (tip ? this.explorer.hitOpenPhoto(tip, 0.5) : null) ||
+          (kind?.kind === 'photo' ? { x: 0.5, y: 0.45 } : null);
+        // If they pinch after OK with the photo open, accept even a loose aim —
+        // the unlock already expressed intent.
+        const uv = near ?? { x: 0.5, y: 0.45 };
+        const origin = tip
+          ? new Vector3(tip.x, tip.y, tip.z)
+          : pick?.point.clone() ?? photo.getWorldPosition(new Vector3());
+        this.audio.play('click', origin);
+        this.photoHold = emptyPhotoHold();
+        this.holdProgressRing.visible = false;
+        this.explorer.setPhotoTouchFeedback(uv, 1, true);
+        void this.beginConversion(object.id, origin, false, uv);
+        return;
+      }
+
+      // Secondary: dwell with index tip near the print (large sphere only).
       let holding = false;
       let holdTip: { x: number; y: number; z: number } | null = null;
       let holdUv: { x: number; y: number } | null = null;
-      const hands =
-        this.photoHold.hand === 'right'
-          ? [this.hands.right, this.hands.left]
-          : [this.hands.left, this.hands.right];
-      for (const hand of hands) {
-        if (!object) break;
-        if (this.photoHold.hand && this.photoHold.hand !== hand.handedness) continue;
-        // Still in the OK pose on this hand — wait until they open it to aim.
-        if (isOkHandPose(hand.joints)) continue;
-
-        let uv: { x: number; y: number } | null = null;
-        let tip = hand.indexTip ?? hand.pinchPosition;
-        if (tip) uv = this.explorer.hitOpenPhoto(tip, 0.4);
-
-        // Hand target-ray dwell (Quest pointing) — more reliable than pure poke.
-        if (!uv && hand.rayOrigin && hand.rayDirection) {
-          this.uiOrigin.set(hand.rayOrigin.x, hand.rayOrigin.y, hand.rayOrigin.z);
-          this.uiDir.set(hand.rayDirection.x, hand.rayDirection.y, hand.rayDirection.z).normalize();
-          this.uiRaycaster.far = 2.5;
-          this.uiRaycaster.set(this.uiOrigin, this.uiDir);
-          const hit = this.uiRaycaster.intersectObject(photo, false)[0];
-          if (hit) {
-            uv = hit.uv ? { x: hit.uv.x, y: 1 - hit.uv.y } : { x: 0.5, y: 0.45 };
-            tip = { x: hit.point.x, y: hit.point.y, z: hit.point.z };
-          }
-        }
-        if (!uv || !tip) continue;
-
+      for (const hand of [this.hands.right, this.hands.left]) {
+        const tip = hand.indexTip;
+        if (!tip) continue;
+        const uv = this.explorer.hitOpenPhoto(tip, 0.5);
+        if (!uv) continue;
         holding = true;
         holdTip = tip;
         holdUv = uv;
-        if (this.photoHold.hand !== hand.handedness || !this.photoHold.origin) {
+        if (!this.photoHold.origin) {
           this.photoHold = {
             hand: hand.handedness,
             elapsed: 0,
@@ -716,17 +736,15 @@ export class SceneEchoesApp {
 
       if (!holding && this.photoHold.contacted && this.photoHold.uv && this.photoHold.origin) {
         this.photoHold.lost += dt;
-        if (this.photoHold.lost < 0.45) {
+        if (this.photoHold.lost < 0.5) {
           holding = true;
           holdTip = this.photoHold.origin;
           holdUv = this.photoHold.uv;
         }
       }
 
-      if (!holding || !holdTip || !holdUv || !object) {
-        if (this.photoHold.contacted) {
-          this.audio.play('clickUp', this.photoHold.origin ?? undefined);
-        }
+      if (!holding || !holdTip || !holdUv) {
+        if (this.photoHold.contacted) this.audio.play('clickUp', this.photoHold.origin ?? undefined);
         this.photoHold = emptyPhotoHold();
         this.holdProgressRing.visible = false;
         this.explorer.setPhotoTouchFeedback(null, 0, false);
@@ -737,32 +755,30 @@ export class SceneEchoesApp {
           this.audio.play('click', holdTip);
         }
         if (progress > 0.1 && progress < 1) {
-          const bucket = Math.floor(progress * 5);
+          const bucket = Math.floor(progress * 4);
           if (bucket !== this.photoHold.lastTick) {
             this.photoHold.lastTick = bucket;
             this.audio.play('tick', holdTip);
           }
         }
         this.explorer.setPhotoTouchFeedback(holdUv, progress, true);
-        if (progress >= 1) {
-          const tip = holdTip;
-          const uv = holdUv;
-          this.photoHold = emptyPhotoHold();
-          this.holdProgressRing.visible = false;
-          this.explorer.setPhotoTouchFeedback(null, 0, false);
-          this.audio.play('click', tip);
-          // Keep arm until load succeeds so a failed fetch can be retried.
-          void this.beginConversion(object.id, new Vector3(tip.x, tip.y, tip.z), false, uv);
-          return;
-        }
         this.holdProgressRing.visible = true;
         this.holdProgressRing.position.set(holdTip.x, holdTip.y, holdTip.z);
         this.holdProgressRing.scale.setScalar(0.55 + progress * 0.7);
         (this.holdProgressRing.material as MeshBasicMaterial).opacity = 0.55 + progress * 0.4;
         this.holdProgressRing.lookAt(input.head.position);
-      }
-      if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
-        void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
+        if (progress >= 1) {
+          this.photoHold = emptyPhotoHold();
+          this.holdProgressRing.visible = false;
+          this.audio.play('click', holdTip);
+          void this.beginConversion(
+            object.id,
+            new Vector3(holdTip.x, holdTip.y, holdTip.z),
+            false,
+            holdUv,
+          );
+          return;
+        }
       }
       return;
     }
@@ -787,7 +803,7 @@ export class SceneEchoesApp {
       this.audio.play('chime');
       this.okArmedHintAt = this.time;
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Armed · point or touch the photo and hold');
+        this.explorer.setPhotoGuide('Armed · PINCH the photo to pop into 3D');
       }
     } else if (
       this.space.photoOpen &&
@@ -795,7 +811,7 @@ export class SceneEchoesApp {
       this.okArmedHintAt > 0 &&
       this.time - this.okArmedHintAt > 0.2
     ) {
-      this.explorer.setPhotoGuide('OK gesture first · then hold the photo to pop into 3D');
+      this.explorer.setPhotoGuide('OK gesture first · then pinch the photo to pop into 3D');
       this.okArmedHintAt = 0;
     }
   }
@@ -873,6 +889,7 @@ export class SceneEchoesApp {
     if (this.pendingConverted) return;
     const already = this.converting;
     this.converting = true;
+    this.convertingSince = 0;
     this.space.space = 'converting';
     this.clearHandFeedback();
     if (!already) {
