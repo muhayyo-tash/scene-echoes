@@ -229,9 +229,9 @@ export class FileExplorer {
     mesh.userData.photoSize = { width, height };
     mesh.userData.objectId = id;
     mesh.userData.photoPrint = true;
-    // Close enough for a natural index poke (~forearm reach).
-    const distance = 0.48;
-    const centerY = head.y - 0.06;
+    // Close enough for poke or easy hand-ray aim.
+    const distance = 0.5;
+    const centerY = head.y - 0.05;
     mesh.position.set(
       head.x + forward.x * distance,
       centerY,
@@ -330,8 +330,8 @@ export class FileExplorer {
     const fill = 0.35 + progress * 0.9;
     this.pokeProgress.scale.setScalar(fill);
     (this.pokeProgress.material as MeshBasicMaterial).opacity = 0.2 + progress * 0.55;
-    // Button travel: slight squash toward the wearer (local +Z faces user).
-    photo.scale.setScalar(this.photoRestScale * (1 - Math.min(0.04, 0.012 + progress * 0.03)));
+    // Keep scale stable — scaling the print broke Quest fingertip hit tests.
+    photo.scale.setScalar(this.photoRestScale);
   }
 
   closePhoto(): void {
@@ -346,34 +346,36 @@ export class FileExplorer {
   }
 
   /**
-   * Broad near-field hit on the open print — slab test, then a sphere fallback
-   * so Quest tip jitter still counts when the finger is clearly at the photo.
+   * Very forgiving photo hit for Quest hands: large sphere around the print,
+   * plus a thick local slab. Prefer world distance so tip jitter still counts.
    */
   hitOpenPhoto(
     point: { x: number; y: number; z: number },
-    pad = 0.22,
+    pad = 0.35,
   ): { x: number; y: number } | null {
     const photo = this.openPhoto;
     if (!photo || !this.photoGroup.visible) return null;
+    // Hit tests must ignore press-in scale feedback.
+    const savedScale = photo.scale.x;
+    photo.scale.setScalar(this.photoRestScale);
     photo.updateWorldMatrix(true, true);
     photo.getWorldPosition(this.world);
     const size = photo.userData.photoSize as { width: number; height: number } | undefined;
     const w = size?.width ?? config.openPhotoWidth;
     const h = size?.height ?? config.openPhotoWidth * 0.75;
+    const reach = Math.max(0.38, Math.hypot(w, h) * 0.75 + 0.2);
+    const nearCenter = this.world.distanceTo(point as never) <= reach;
     const local = photo.worldToLocal(new Vector3(point.x, point.y, point.z));
-    // Thick slab in front of / through the print.
-    if (local.z <= 0.5 && local.z >= -0.25) {
+    photo.scale.setScalar(savedScale);
+    photo.updateWorldMatrix(true, true);
+    if (local.z <= 0.7 && local.z >= -0.35) {
       const u = local.x / w + 0.5;
       const v = 0.5 - local.y / h;
       if (u >= -pad && u <= 1 + pad && v >= -pad && v <= 1 + pad) {
         return { x: Math.min(1, Math.max(0, u)), y: Math.min(1, Math.max(0, v)) };
       }
     }
-    // Sphere fallback around the print center (arm-reach poke).
-    const reach = Math.hypot(w, h) * 0.55 + 0.12;
-    if (this.world.distanceTo(point as never) <= reach) {
-      return { x: 0.5, y: 0.45 };
-    }
+    if (nearCenter) return { x: 0.5, y: 0.45 };
     return null;
   }
 
