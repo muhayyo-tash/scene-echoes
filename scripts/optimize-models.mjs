@@ -1,4 +1,4 @@
-import { readdirSync, existsSync, readFileSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,18 +15,51 @@ if (!files.length) {
 }
 
 const manifest = JSON.parse(readFileSync(join(root, 'public/assets/manifest.json'), 'utf8'));
-const maxTriangles = 30000;
 
 try {
   const { NodeIO, getBounds } = await import('@gltf-transform/core');
-  const { dedup, prune, resample, weld } = await import('@gltf-transform/functions');
-  const io = new NodeIO();
+  const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
+  const {
+    dedup,
+    prune,
+    resample,
+    weld,
+    simplify,
+    textureCompress,
+    meshopt,
+    quantize,
+  } = await import('@gltf-transform/functions');
+  const { MeshoptEncoder, MeshoptSimplifier } = await import('meshoptimizer');
+  await MeshoptEncoder.ready;
+  await MeshoptSimplifier.ready;
+
+  const io = new NodeIO()
+    .registerExtensions(ALL_EXTENSIONS)
+    .registerDependencies({
+      'meshopt.encoder': MeshoptEncoder,
+      'meshopt.decoder': MeshoptEncoder,
+    });
+
   for (const file of files) {
     const path = join(dir, file);
+    const before = statSync(path).size;
+    // Already Quest-sized — skip re-work that can re-expand textures.
+    if (before < 2_500_000 && file !== 'sofa.glb') {
+      console.log('skip small', file, `${(before / 1024).toFixed(0)}KB`);
+      continue;
+    }
     const doc = await io.read(path);
-    await doc.transform(dedup(), weld(), resample(), prune());
     const id = file.replace(/\.(glb|gltf)$/, '');
     const entry = manifest.objects.find((object) => (object.model ?? '').includes(id));
+    const transforms = [dedup(), weld()];
+    // Heavy sofa must be tiny for Quest Browser + GitHub Pages Wi-Fi.
+    if (file === 'sofa.glb' || before > 3_000_000) {
+      transforms.push(
+        simplify({ simplifier: MeshoptSimplifier, ratio: 0.35, error: 0.001 }),
+        textureCompress({ targetFormat: 'webp', resize: [1024, 1024] }),
+      );
+    }
+    transforms.push(resample(), prune());
     const rootNode = doc.getRoot().listNodes()[0];
     if (rootNode) {
       const bounds = getBounds(doc.getRoot().listScenes()[0]);
@@ -45,9 +78,17 @@ try {
         0,
       ]);
     }
-    void maxTriangles;
+    if (file === 'sofa.glb' || before > 3_000_000) {
+      transforms.push(quantize(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+    }
+    await doc.transform(...transforms);
     await io.write(path, doc);
-    console.log('optimized', file);
+    const after = statSync(path).size;
+    console.log(
+      'optimized',
+      file,
+      `${(before / 1024 / 1024).toFixed(2)}MB → ${(after / 1024 / 1024).toFixed(2)}MB`,
+    );
   }
 } catch (error) {
   console.warn('model optimization skipped:', error.message);

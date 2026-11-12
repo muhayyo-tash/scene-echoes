@@ -66,6 +66,7 @@ import { createFallbackLights } from '../core/lighting.js';
 import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
 import { SceneCapture } from '../core/scene-capture.js';
 import {
+  canCommitOkPop,
   consumeOkArm,
   createOkGestureState,
   isOkHandPose,
@@ -638,18 +639,19 @@ export class SceneEchoesApp {
       if (this.space.photoOpen && Math.floor(this.convertingSince) !== Math.floor(this.convertingSince - dt)) {
         this.explorer.setPhotoGuide(`Loading 3D model… ${Math.floor(this.convertingSince)}s`);
       }
-      // Sofa GLB is large; allow a long fetch on Quest Wi-Fi.
-      if (!this.pendingConverted && this.convertingSince > 90) {
+      if (!this.pendingConverted && this.convertingSince > 45) {
         console.warn('[scene-echoes] conversion timed out');
         this.conversion.finish();
         this.converting = false;
         this.convertingSince = 0;
         this.okGesture.armed = true;
         this.okGesture.armedFor = 1;
+        this.okGesture.ready = true;
+        this.okGesture.readyFor = 1;
         this.space.space = this.space.photoOpen ? 'photo' : 'clean';
         this.audio.play('thud');
         if (this.space.photoOpen) {
-          this.explorer.setPhotoGuide('Load timed out · OK again, then pinch');
+          this.explorer.setPhotoGuide('Load timed out · pinch again to retry');
         }
       }
       return;
@@ -661,7 +663,8 @@ export class SceneEchoesApp {
       const object =
         (objectId ? this.objects.find((item) => item.id === objectId) : null) ??
         this.objects.find((item) => item.scene === 'object3d');
-      if (!this.okGesture.armed || this.okGesture.armedFor < 0.15) {
+      // Strict sequence: OK → release → pinch. Never start load during the OK pose.
+      if (!canCommitOkPop(this.okGesture)) {
         this.photoHold = emptyPhotoHold();
         if (debugParams.handsLess && !this.desktop && this.idle > config.handlessDelaySeconds && object) {
           void this.beginConversion(object.id, photo.position.clone(), false, { x: 0.5, y: 0.4 });
@@ -671,9 +674,9 @@ export class SceneEchoesApp {
 
       if (!object) return;
 
-      // After OK: pinch to pop (same select gesture as Finder cards).
       for (const hand of [this.hands.right, this.hands.left]) {
         if (!hand.justPinched) continue;
+        if (isOkHandPose(hand.joints)) continue;
         const tip = hand.pinchPosition ?? hand.indexTip;
         const uv = (tip ? this.explorer.hitOpenPhoto(tip, 0.55) : null) ?? { x: 0.5, y: 0.45 };
         const origin = tip
@@ -691,9 +694,11 @@ export class SceneEchoesApp {
   }
 
   private updateOkUnlock(dt: number, _input: FrameInput): void {
-    // Flat desktop preview has no hand joints — keep pop armed for click-hold.
+    // Flat desktop preview has no hand joints — keep pop armed+ready for click-hold.
     if (this.desktop) {
       this.okGesture.armed = true;
+      this.okGesture.ready = true;
+      this.okGesture.readyFor = 1;
       return;
     }
     const posing =
@@ -701,20 +706,23 @@ export class SceneEchoesApp {
         .filter((hand) => hand.tracked)
         .map((hand) => hand.joints)
         .find((joints) => isOkHandPose(joints)) ?? null;
-    const { justArmed } = updateOkGesture(this.okGesture, posing, dt);
+    const { justArmed, justReady } = updateOkGesture(this.okGesture, posing, dt);
     if (justArmed) {
       this.audio.play('chime');
       this.okArmedHintAt = this.time;
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Armed · PINCH the photo to pop into 3D');
+        this.explorer.setPhotoGuide('OK locked · open your hand, then pinch the photo');
       }
+    } else if (justReady && this.space.photoOpen) {
+      this.audio.play('tick');
+      this.explorer.setPhotoGuide('Ready · pinch the photo to pop into 3D');
     } else if (
       this.space.photoOpen &&
       !this.okGesture.armed &&
       this.okArmedHintAt > 0 &&
       this.time - this.okArmedHintAt > 0.2
     ) {
-      this.explorer.setPhotoGuide('OK gesture first · then pinch the photo to pop into 3D');
+      this.explorer.setPhotoGuide('OK gesture first · release · then pinch the photo');
       this.okArmedHintAt = 0;
     }
   }
@@ -819,8 +827,10 @@ export class SceneEchoesApp {
       this.audio.play('thud', origin);
       this.okGesture.armed = true;
       this.okGesture.armedFor = 1;
+      this.okGesture.ready = true;
+      this.okGesture.readyFor = 1;
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Load failed · OK again, then pinch to retry');
+        this.explorer.setPhotoGuide('Load failed · pinch again to retry');
       }
     }
   }
