@@ -29,21 +29,34 @@ describe('pointer ray', () => {
     expect(hands.right.justPinched).toBe(false);
   });
 
-  it('prefers Meta gamepad select over tip distance', () => {
+  it('accepts Meta select even when tips are not yet touching', () => {
+    const hands = createHands();
+    const open = sampleFromJoints('right', {
+      wrist: { x: 0, y: 1, z: 0 },
+      'index-finger-tip': { x: 0.05, y: 1, z: 0 },
+      'thumb-tip': { x: 0, y: 1, z: 0 },
+    });
+    open.selectPressed = false;
+    open.selectValue = 0.2;
+    updateHandRuntime(hands.right, open, 0.016, 1, false, true, false, false);
+    expect(hands.right.pinched).toBe(false);
+
+    const select = { ...open, selectPressed: true, selectValue: 1 };
+    updateHandRuntime(hands.right, select, 0.016, 1, false, true, false, false);
+    expect(hands.right.pinched).toBe(true);
+    expect(hands.right.justPinched).toBe(true);
+  });
+
+  it('still pinches from tight tip contact when select is false', () => {
     const hands = createHands();
     const near = sampleFromJoints('right', {
       wrist: { x: 0, y: 1, z: 0 },
-      'index-finger-tip': { x: 0.01, y: 1, z: 0 },
+      'index-finger-tip': { x: 0.015, y: 1, z: 0 },
       'thumb-tip': { x: 0, y: 1, z: 0 },
     });
     near.selectPressed = false;
-    near.selectValue = 0.2;
+    near.selectValue = 0;
     updateHandRuntime(hands.right, near, 0.016, 1, false, true, false, false);
-    expect(hands.right.pinched).toBe(false);
-    expect(hands.right.justPinched).toBe(false);
-
-    const select = { ...near, selectPressed: true, selectValue: 1 };
-    updateHandRuntime(hands.right, select, 0.016, 1, false, true, false, false);
     expect(hands.right.pinched).toBe(true);
     expect(hands.right.justPinched).toBe(true);
   });

@@ -140,19 +140,22 @@ export function updateHandRuntime(
   const dist =
     sample.thumbTip && sample.indexTip ? distance3(sample.thumbTip, sample.indexTip) : 1;
   const wasPinched = hand.pinched;
-  // Official Meta path: gamepad button 0 / select. Distance is only a desktop fallback.
-  if (sample.selectPressed !== null) {
-    hand.pinched = sample.selectPressed;
-    hand.pinch.pinched = sample.selectPressed;
-  } else {
-    hand.pinched = updatePinch(hand.pinch, dist, config.pinchOnDistance, config.pinchOffDistance);
-  }
+  // Meta: selectstart / gamepad button 0. Also keep tight tip-contact so Finder
+  // still opens if a frame misses the gamepad poll (tips must nearly touch).
+  const tipPinched = updatePinch(
+    hand.pinch,
+    dist,
+    config.pinchOnDistance,
+    config.pinchOffDistance,
+  );
+  hand.pinched = Boolean(sample.selectPressed) || tipPinched;
+  hand.pinch.pinched = hand.pinched;
   hand.justPinched = hand.pinched && !wasPinched;
   hand.pinchPosition =
     hand.pinched && sample.thumbTip && sample.indexTip
       ? pinchMidpoint(sample.thumbTip, sample.indexTip)
       : null;
-  hand.open = !hand.pinched && (sample.selectPressed === null ? dist > config.pinchOffDistance : true);
+  hand.open = !hand.pinched && dist > config.pinchOffDistance;
   if (hand.pinchPosition) {
     updateLongPress(
       hand.longPress,

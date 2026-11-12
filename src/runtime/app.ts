@@ -591,28 +591,34 @@ export class SceneEchoesApp {
   }
 
   private async openPhotoCard(id: string, input: FrameInput): Promise<void> {
-    this.space = openPhoto(this.space);
-    const forward = forwardFrom(input.head.quaternion);
-    await this.explorer.openPhotoPrint(id, {
-      x: input.head.position.x,
-      y: input.head.position.y,
-      z: input.head.position.z,
-    }, forward);
-    // User already chose this photo — warm its GLB quietly (does not start conversion).
-    const object = this.objects.find((item) => item.id === id);
-    if (object?.model) {
-      void loadModel(object).catch((error) => {
-        console.warn('[scene-echoes] warm model failed', id, error);
-      });
+    try {
+      this.space = openPhoto(this.space);
+      const forward = forwardFrom(input.head.quaternion);
+      await this.explorer.openPhotoPrint(id, {
+        x: input.head.position.x,
+        y: input.head.position.y,
+        z: input.head.position.z,
+      }, forward);
+      // User already chose this photo — warm its GLB quietly (does not start conversion).
+      const object = this.objects.find((item) => item.id === id);
+      if (object?.model) {
+        void loadModel(object).catch((error) => {
+          console.warn('[scene-echoes] warm model failed', id, error);
+        });
+      }
+      // The pinch that opened this card must not also pop it.
+      this.photoOpenedAt = this.time;
+      this.photoSawOpenHand = false;
+      this.photoPinchCooldown = 0.45;
+      this.explorer.setPhotoGuide('Release · then point at the photo');
+      this.hintPlayed.pinch = true;
+      this.ghost.visible = false;
+      this.ghost.userData.anim = undefined;
+    } catch (error) {
+      console.warn('[scene-echoes] open photo failed', id, error);
+      this.space = closePhoto(this.space);
+      this.explorer.closePhoto();
     }
-    // The pinch that opened this card must not also pop it.
-    this.photoOpenedAt = this.time;
-    this.photoSawOpenHand = false;
-    this.photoPinchCooldown = 0.45;
-    this.explorer.setPhotoGuide('Release · then point at the photo');
-    this.hintPlayed.pinch = true;
-    this.ghost.visible = false;
-    this.ghost.userData.anim = undefined;
   }
 
   /**

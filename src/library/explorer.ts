@@ -92,12 +92,15 @@ export class FileExplorer {
         }),
       );
       glow.position.set(layout.x, layout.y, 0.008);
+      glow.raycast = () => undefined;
       const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
       const label = new Mesh(
         new PlaneGeometry(0.16, 0.032),
         new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
       );
       label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
+      // Labels must not steal the hand-ray from the card mesh.
+      label.raycast = () => undefined;
       this.group.add(glow, mesh, label);
       const card: ExplorerCard = { id: layout.id, type: layout.type, mesh, layout, glow, label };
       this.cards.push(card);

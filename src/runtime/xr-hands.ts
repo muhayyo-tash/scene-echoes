@@ -17,6 +17,33 @@ const JOINTS = [
   'pinky-finger-phalanx-proximal',
 ] as const;
 
+/** WebXR selectstart/selectend — Meta’s primary action for hand pinch. */
+const selectByHand: { left: boolean; right: boolean } = { left: false, right: false };
+let boundSession: XRSession | null = null;
+let onSelectStart: ((event: XRInputSourceEvent) => void) | null = null;
+let onSelectEnd: ((event: XRInputSourceEvent) => void) | null = null;
+
+function ensureSelectListeners(session: XRSession): void {
+  if (boundSession === session) return;
+  if (boundSession && onSelectStart && onSelectEnd) {
+    boundSession.removeEventListener('selectstart', onSelectStart);
+    boundSession.removeEventListener('selectend', onSelectEnd);
+  }
+  selectByHand.left = false;
+  selectByHand.right = false;
+  onSelectStart = (event) => {
+    const hand = event.inputSource.handedness;
+    if (hand === 'left' || hand === 'right') selectByHand[hand] = true;
+  };
+  onSelectEnd = (event) => {
+    const hand = event.inputSource.handedness;
+    if (hand === 'left' || hand === 'right') selectByHand[hand] = false;
+  };
+  session.addEventListener('selectstart', onSelectStart);
+  session.addEventListener('selectend', onSelectEnd);
+  boundSession = session;
+}
+
 export function samplesFromFrame(
   world: World,
   frame: XRFrame | null,
@@ -25,6 +52,7 @@ export function samplesFromFrame(
   if (!session || !frame || !world.xrReferenceSpace) {
     return { left: null, right: null };
   }
+  ensureSelectListeners(session);
   let left: HandSample | null = null;
   let right: HandSample | null = null;
   for (const source of session.inputSources) {
@@ -52,16 +80,12 @@ export function samplesFromFrame(
       sample.rayOrigin = ray.origin;
       sample.rayDirection = ray.direction;
     }
-    // Meta WebXR Hands: regular pinch = emulated Gamepad button 0 (not tip distance).
-    // Quest Browser applies its own press/release hysteresis (~0.9 / ~0.7 strength).
+    // Meta WebXR Hands: pinch = select events + emulated Gamepad button 0.
     const btn = source.gamepad?.buttons?.[0];
-    if (btn) {
-      sample.selectValue = typeof btn.value === 'number' ? btn.value : btn.pressed ? 1 : 0;
-      sample.selectPressed = Boolean(btn.pressed);
-    } else {
-      sample.selectPressed = null;
-      sample.selectValue = null;
-    }
+    const value = btn && typeof btn.value === 'number' ? btn.value : null;
+    sample.selectValue = value ?? (btn?.pressed ? 1 : selectByHand[handedness] ? 1 : 0);
+    sample.selectPressed =
+      selectByHand[handedness] || Boolean(btn?.pressed) || (value !== null && value >= 0.9);
     if (handedness === 'left') left = sample;
     else right = sample;
   }
