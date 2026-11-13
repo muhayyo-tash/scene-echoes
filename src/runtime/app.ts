@@ -634,11 +634,14 @@ export class SceneEchoesApp {
     try {
       this.space = openPhoto(this.space);
       const forward = forwardFrom(input.head.quaternion);
-      await this.explorer.openPhotoPrint(id, {
+      const head = {
         x: input.head.position.x,
         y: input.head.position.y,
         z: input.head.position.z,
-      }, forward);
+      };
+      // Hide Meta Echoes folder as soon as a photo is chosen.
+      this.explorer.setOpen(false, head, forward);
+      await this.explorer.openPhotoPrint(id, head, forward);
       this.audio.play('click', {
         x: this.explorer.openPhoto?.position.x ?? input.head.position.x,
         y: this.explorer.openPhoto?.position.y ?? input.head.position.y,

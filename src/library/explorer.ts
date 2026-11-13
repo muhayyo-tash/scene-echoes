@@ -280,8 +280,10 @@ export class FileExplorer {
     this.photoGroup.userData.photoPrint = true;
     this.photoGroup.add(shadow, hitPlate, mesh, guide);
     this.photoGroup.visible = true;
+    // Folder panel goes away while the photo is open.
+    this.visible = false;
     this.group.visible = false;
-    // Dock stays head-locked top-right so Finder can be opened again later.
+    // Dock stays so Meta Echoes can be opened again later.
     this.iconGroup.visible = true;
     this.openPhoto = mesh;
     this.dimOthers(id, true);
@@ -296,7 +298,9 @@ export class FileExplorer {
     // Drop children so a stale print cannot keep covering the room.
     this.photoGroup.clear();
     this.dimOthers(null, false);
-    this.group.visible = this.visible;
+    // Keep the folder closed after the photo leaves — room stays clean.
+    this.visible = false;
+    this.group.visible = false;
     this.iconGroup.visible = true;
   }
 

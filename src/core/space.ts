@@ -23,13 +23,15 @@ export function closeExplorer(state: SpaceState): SpaceState {
 }
 
 export function openPhoto(state: SpaceState): SpaceState {
-  return { ...state, photoOpen: true, space: 'photo' };
+  // Opening a photo dismisses the folder panel — only the print stays up.
+  return { ...state, photoOpen: true, explorerOpen: false, space: 'photo' };
 }
 
 export function closePhoto(state: SpaceState): SpaceState {
   return {
     ...state,
     photoOpen: false,
+    // After a photo session the room stays clean; reopen via the dock icon.
     space: state.explorerOpen ? 'explorer' : 'clean',
   };
 }
