@@ -65,22 +65,6 @@ Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object
 
 ## Asset folder layout
 
-Prepared demo assets live under `public/assets/`:
-
-```
-public/assets/
-  explorer.json          # which items appear in Meta Echoes (photos / films)
-  manifest.json          # id → photo + model paths, size, hotspot
-  photos/                # 2D images shown in Meta Echoes
-    sofa.jpg             # competition photo (jury path)
-  masks/                 # optional cutout masks
-  models/                # pre-baked GLBs
-    sofa.glb             # keep for submission — Meta Echoes sofa pop
-    eagle.glb            # empty-space fist demo stand-in (safe to remove before submit)
-    duck.glb             # book / legacy sample
-  movie/                 # optional MP4 films + timeline
-```
-
 | Path | Role |
 | --- | --- |
 | `public/assets/photos/` | 2D images for Meta Echoes cards |
