@@ -14,6 +14,7 @@
     "generate-placeholders": "node scripts/generate-placeholders.mjs",
     "optimize-models": "node scripts/optimize-models.mjs",
     "optimize-video": "node scripts/optimize-video.mjs",
+    "prepare-film": "node scripts/prepare-film-timeline.mjs",
     "validate-timeline": "node scripts/validate-timeline.mjs",
     "mock-conversion-server": "node scripts/mock-conversion-server.mjs",
     "conversion-server": "node scripts/conversion-server.mjs",

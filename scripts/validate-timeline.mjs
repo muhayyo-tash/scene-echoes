@@ -14,7 +14,8 @@ for (const moment of timeline.moments) {
   if (!object) errors.push(`Moment ${moment.id} references missing object ${moment.objectId}`);
   else if (object.scene !== 'movie') errors.push(`Moment ${moment.id} object is not a movie object`);
   else if (object.kind !== 'effect' && object.model && !existsSync(join(root, 'public', object.model))) {
-    errors.push(`Moment ${moment.id} model file is missing: ${object.model}`);
+    // prepare-film writes the timeline before GLBs exist — warn, don't fail the build.
+    warnings.push(`Moment ${moment.id} model file is missing: ${object.model}`);
   }
   if (!(moment.time > previous)) errors.push(`Moment ${moment.id} time does not increase`);
   const r = moment.rect;

@@ -163,7 +163,7 @@ function photoFromManifest(id) {
   return { bytes: readFileSync(path), mime: path.endsWith('.png') ? 'image/png' : 'image/jpeg' };
 }
 
-async function geminiText(image, prompt) {
+export async function geminiText(image, prompt) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is missing');
   const body = {

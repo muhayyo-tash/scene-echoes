@@ -106,6 +106,24 @@ Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object
 
 Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the open print loads that GLB.
 
-## Adding a film
+## Adding a film (offline demo timeline)
 
-Drop an MP4 in `public/assets/movie/`. Meta Echoes Movies lists each file. Click it to process that video (frames every 6 seconds, at most 4 SAM 3D reconstructions). No bundled fox, flamingo, or park clip.
+1. Drop an MP4 in `public/assets/movie/` (e.g. `park.mp4`).
+2. With `GEMINI_API_KEY` in `.env` and `ffmpeg` installed, generate the timeline (Gemini labels frames — no Hugging Face):
+
+```bash
+npm run prepare-film -- park
+```
+
+That samples frames every 6s, asks Gemini what the main object is, then writes:
+
+- `public/assets/movie/timeline.json` — when each object appears
+- movie entries in `public/assets/manifest.json`
+- `public/assets/movie/films.json` — Meta Echoes Movies list
+
+3. Drop matching pre-baked GLBs where the script tells you, e.g. `public/assets/models/fox.glb`.
+4. `npm run validate-timeline` then `npm run dev`.
+
+Optional flags: `--every 4` (seconds between frames), `--max 6` (max moments).
+
+Local live film reconstruction (Gemini + Hugging Face) still runs through `npm run dev` with both API keys; this script is only for baking a demo timeline without HF.
