@@ -108,22 +108,26 @@ Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the op
 
 ## Adding a film (offline demo timeline)
 
+Competition / Pages ships a **preprocessed** film (timeline + GLBs already in the repo), so Quest playback does not wait on APIs. Use this script only when you want to bake your own MP4.
+
 1. Drop an MP4 in `public/assets/movie/` (e.g. `park.mp4`).
-2. With `GEMINI_API_KEY` in `.env` and `ffmpeg` installed, generate the timeline (Gemini labels frames — no Hugging Face):
+2. With `GEMINI_API_KEY` + `HF_TOKEN` in `.env` and `ffmpeg` installed:
 
 ```bash
-npm run prepare-film -- park
+npm run prepare-film -- park.mp4
 ```
 
-That samples frames every 6s, asks Gemini what the main object is, then writes:
+Pass the full MP4 name (or path). Bare ids like `park` error.
 
+That extracts JPEG frames (at 1s, then every 5s), asks Gemini to name each, then sends the same frame + label to Hugging Face (SAM 3D Objects). Expect **~1.5 minutes per object** on HF (plus a short Gemini call). The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
+
+Writes:
+
+- `public/assets/models/<object>.glb` — reconstructed props
 - `public/assets/movie/timeline.json` — when each object appears
 - movie entries in `public/assets/manifest.json`
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 
-3. Drop matching pre-baked GLBs where the script tells you, e.g. `public/assets/models/fox.glb`.
-4. `npm run validate-timeline` then `npm run dev`.
+Optional flags: `--every 4` (spacing after the first 1s frame), `--max 6` (max moments), `--skip-hf` (timeline only; you drop GLBs yourself).
 
-Optional flags: `--every 4` (seconds between frames), `--max 6` (max moments).
-
-Local live film reconstruction (Gemini + Hugging Face) still runs through `npm run dev` with both API keys; this script is only for baking a demo timeline without HF.
+Live film conversion on `npm run dev` uses the same Gemini → HF path; this script bakes those assets for the offline demo / Pages deploy.

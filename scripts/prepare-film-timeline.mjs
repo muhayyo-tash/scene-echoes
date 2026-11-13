@@ -1,28 +1,33 @@
 #!/usr/bin/env node
 /**
- * Offline movie demo prep (Gemini only — no Hugging Face).
+ * Offline movie demo prep (Gemini + Hugging Face).
  *
- * 1. Samples frames every N seconds from public/assets/movie/<id>.mp4
+ * 1. Samples a frame at 1s, then every N seconds (default 5) from public/assets/movie/<id>.mp4
  * 2. Asks Gemini what the main object in each frame is
- * 3. Writes public/assets/movie/timeline.json
- * 4. Merges movie objects into public/assets/manifest.json
- * 5. Refreshes films.json
- *
- * You still drop matching GLBs at public/assets/models/<objectId>.glb
- * (the script prints which files are missing).
+ * 3. Sends that same JPEG + label to SAM 3D Objects (Hugging Face) and writes the GLB
+ * 4. Writes public/assets/movie/timeline.json
+ * 5. Merges movie objects into public/assets/manifest.json
+ * 6. Refreshes films.json
  *
  * Usage:
- *   npm run prepare-film -- <filmId>
- *   npm run prepare-film -- park
- *   npm run prepare-film -- park --every 6 --max 4
+ *   npm run prepare-film -- park.mp4
+ *   npm run prepare-film -- public/assets/movie/park.mp4
+ *   npm run prepare-film -- park.mp4 --every 5 --max 4
+ *   npm run prepare-film -- park.mp4 --skip-hf   # timeline only; you drop GLBs yourself
  *
- * Requires: GEMINI_API_KEY in .env, ffmpeg + ffprobe on PATH.
+ * Requires: GEMINI_API_KEY + HF_TOKEN in .env (unless --skip-hf), ffmpeg + ffprobe on PATH.
+ * The argument must include .mp4 (bare ids like "park" are rejected).
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { geminiText, loadDotenv, parseObjectName } from './live-reconstruct.mjs';
+import {
+  geminiText,
+  loadDotenv,
+  parseObjectName,
+  reconstructObject,
+} from './live-reconstruct.mjs';
 import { writeFilmsIndex } from './list-films.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,18 +70,20 @@ const LABEL_BEHAVIOR = {
 const SIDES = ['right', 'low-left', 'left', 'low-right'];
 
 function usage() {
-  console.error(`Usage: npm run prepare-film -- <filmId|path.mp4> [--every 6] [--max 8]
+  console.error(`Usage: npm run prepare-film -- <name.mp4|path.mp4> [--every 5] [--max 8] [--skip-hf]
 
-Example: npm run prepare-film -- park
-Put park.mp4 in public/assets/movie/ first.`);
+Example: npm run prepare-film -- park.mp4
+Samples at 1s, then every N seconds (default 5). Gemini names each frame; HF builds the GLB.
+Bare ids without .mp4 are rejected. Use --skip-hf to write the timeline only.`);
   process.exit(1);
 }
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   if (!args.length || args.includes('-h') || args.includes('--help')) usage();
-  let every = 6;
+  let every = 5;
   let max = 8;
+  let skipHf = false;
   const positional = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -88,21 +95,31 @@ function parseArgs(argv) {
       max = Number(args[++i]);
       continue;
     }
+    if (a === '--skip-hf') {
+      skipHf = true;
+      continue;
+    }
     positional.push(a);
   }
   if (!positional[0] || !Number.isFinite(every) || every <= 0 || !Number.isFinite(max) || max < 1) {
     usage();
   }
-  return { input: positional[0], every, max: Math.floor(max) };
+  return { input: positional[0], every, max: Math.floor(max), skipHf };
 }
 
 function resolveFilm(input) {
-  if (input.toLowerCase().endsWith('.mp4') && existsSync(input)) {
-    const id = basename(input).replace(/\.mp4$/i, '');
-    return { id, path: input };
+  if (!input.toLowerCase().endsWith('.mp4')) {
+    throw new Error(
+      `Film argument must end with .mp4 (got "${input}").\n` +
+        `Use: npm run prepare-film -- park.mp4\n` +
+        `  or: npm run prepare-film -- public/assets/movie/park.mp4`,
+    );
   }
-  const id = input.replace(/\.mp4$/i, '');
-  const path = join(movieDir, `${id}.mp4`);
+  const id = basename(input).replace(/\.mp4$/i, '');
+  if (!id) {
+    throw new Error(`Invalid film name: "${input}"`);
+  }
+  const path = existsSync(input) ? input : join(movieDir, basename(input));
   if (!existsSync(path)) {
     throw new Error(`Missing film: ${path}\nDrop the MP4 there first, then re-run.`);
   }
@@ -156,25 +173,36 @@ function mergeManifest(movieObjects) {
 
 async function main() {
   loadDotenv();
-  const { input, every, max } = parseArgs(process.argv);
+  const { input, every, max, skipHf } = parseArgs(process.argv);
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY missing. Copy .env.example → .env and set the key.');
+  }
+  if (!skipHf && !process.env.HF_TOKEN) {
+    throw new Error(
+      'HF_TOKEN missing. Copy .env.example → .env and set the Hugging Face token,\n' +
+        'or pass --skip-hf to bake the timeline only and drop GLBs yourself.',
+    );
   }
 
   const film = resolveFilm(input);
   const duration = probeDuration(film.path);
+  const first = 1;
   const times = [];
-  for (let t = every; t < duration; t += every) times.push(Number(t.toFixed(2)));
-  if (!times.length) times.push(Number(Math.min(every, duration / 2).toFixed(2)));
+  if (duration > first) {
+    for (let t = first; t < duration; t += every) times.push(Number(t.toFixed(2)));
+  }
+  if (!times.length) times.push(Number(Math.min(first, Math.max(0.1, duration / 2)).toFixed(2)));
 
   console.log(
-    `[prepare-film] ${film.id}.mp4 — ${duration.toFixed(1)}s, sample every ${every}s → ${times.length} frames (cap ${max} moments)`,
+    `[prepare-film] ${film.id}.mp4 — ${duration.toFixed(1)}s, frames at ${first}s then every ${every}s → ${times.length} frames (cap ${max} moments)${skipHf ? ' [skip-hf]' : ''}`,
   );
 
   const frameDir = join(root, 'tmp', 'film-frames', `prepare-${film.id}`);
   mkdirSync(frameDir, { recursive: true });
+  mkdirSync(modelsDir, { recursive: true });
 
   const chosen = [];
+  const rebuilt = new Set();
   for (let i = 0; i < times.length; i++) {
     if (chosen.length >= max) break;
     const time = times[i];
@@ -200,6 +228,34 @@ async function main() {
     }
     const isEffect = EFFECT_LABELS.has(label.split(/\s+/)[0]);
     const behavior = isEffect ? 'rain' : behaviorFor(label);
+
+    if (!isEffect && !skipHf && !rebuilt.has(objectId)) {
+      const outPath = join(modelsDir, `${objectId}.glb`);
+      if (existsSync(outPath)) {
+        rebuilt.add(objectId);
+        console.log(`[prepare-film] ${time}s reuse existing public/assets/models/${objectId}.glb`);
+      } else {
+        const started = Date.now();
+        console.log(`[prepare-film] ${time}s reconstructing "${label}" via Hugging Face…`);
+        try {
+          const glb = await reconstructObject(image, label);
+          writeFileSync(outPath, glb);
+          rebuilt.add(objectId);
+          console.log(
+            `[prepare-film] wrote public/assets/models/${objectId}.glb (${glb.length} bytes, ${((Date.now() - started) / 1000).toFixed(1)}s)`,
+          );
+        } catch (error) {
+          console.warn(
+            `[prepare-film] ${time}s HF reconstruct failed:`,
+            error instanceof Error ? error.message : error,
+          );
+          continue;
+        }
+      }
+    } else if (!isEffect && !skipHf && rebuilt.has(objectId)) {
+      console.log(`[prepare-film] ${time}s reuse existing ${objectId}.glb`);
+    }
+
     chosen.push({
       momentId: `${objectId}-${String(time).replace('.', '_')}`,
       time,
@@ -256,11 +312,13 @@ async function main() {
   console.log(`[prepare-film] updated ${manifestPath} (+${movieObjects.length} movie objects)`);
   console.log(`[prepare-film] refreshed films.json`);
   if (missing.length) {
-    console.log('\nAdd these pre-baked GLBs, then re-run npm run validate-timeline:');
+    console.log('\nStill missing GLBs (HF skipped or failed):');
     for (const path of missing) console.log(`  public/${path}`);
+    console.log('Add them manually, or re-run without --skip-hf.');
   } else {
     console.log('[prepare-film] all referenced GLBs are present');
   }
+  console.log('Next: npm run validate-timeline');
 }
 
 main().catch((error) => {

@@ -10,7 +10,12 @@
       "realSize": 0.5,
       "up": "y",
       "baseOffset": 0,
-      "hotspot": { "type": "circle", "x": 0.5, "y": 0.4, "r": 0.32 }
+      "hotspot": {
+        "type": "circle",
+        "x": 0.5,
+        "y": 0.4,
+        "r": 0.32
+      }
     },
     {
       "id": "eagle",
@@ -21,7 +26,22 @@
       "realSize": 0.4,
       "up": "y",
       "baseOffset": 0,
-      "hotspot": { "type": "circle", "x": 0.5, "y": 0.5, "r": 0.4 }
+      "hotspot": {
+        "type": "circle",
+        "x": 0.5,
+        "y": 0.5,
+        "r": 0.4
+      }
+    },
+    {
+      "id": "deer",
+      "scene": "movie",
+      "kind": "object",
+      "label": "deer",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/deer.glb"
     }
   ]
 }

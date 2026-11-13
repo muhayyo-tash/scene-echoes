@@ -1,3 +1,17 @@
 {
-  "moments": []
+  "moments": [
+    {
+      "id": "deer-1",
+      "time": 1,
+      "objectId": "deer",
+      "rect": {
+        "x": 0.25,
+        "y": 0.25,
+        "width": 0.5,
+        "height": 0.5
+      },
+      "side": "right",
+      "lifetime": 30
+    }
+  ]
 }

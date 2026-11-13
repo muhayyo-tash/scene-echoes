@@ -234,7 +234,7 @@ async function uploadGradio(bytes, filename) {
   return path;
 }
 
-async function reconstructObject(image, prompt) {
+export async function reconstructObject(image, prompt) {
   const uploaded = await uploadGradio(image.bytes, 'photo.jpg');
   const started = await fetch(`${SPACE}/gradio_api/call/reconstruct_objects`, {
     method: 'POST',
