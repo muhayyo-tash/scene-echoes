@@ -7,7 +7,7 @@ describe('manifest and explorer', () => {
   it('parses the bundled files', () => {
     const { manifest, issues } = parseManifest(bundledManifest);
     expect(manifest.objects.some((o) => o.id === 'sofa')).toBe(true);
-    expect(manifest.objects.some((o) => o.scene === 'book')).toBe(true);
+    expect(manifest.objects.some((o) => o.id === 'eagle')).toBe(true);
     expect(manifest.objects.some((o) => o.scene === 'cat')).toBe(false);
     expect(issues.some((i) => i.level === 'error')).toBe(false);
     const { entries } = parseExplorer(bundledExplorer);

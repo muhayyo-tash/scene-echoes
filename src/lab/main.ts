@@ -47,15 +47,14 @@ const hand = new SimulatedHand();
 scene.add(hand.mesh);
 
 const { manifest } = parseManifest(bundledManifest);
-const sofaObject = manifest.objects.find((item) => item.scene === 'object3d');
-const bookObject = manifest.objects.find((item) => item.scene === 'book');
-const birdObject = manifest.objects.find((item) => item.label === 'bird');
-if (!sofaObject?.model || !bookObject?.model || !birdObject?.model) {
-  throw new Error('Lab requires real GLB paths on sofa, book and bird objects');
+const sofaObject = manifest.objects.find((item) => item.id === 'sofa');
+const eagleObject = manifest.objects.find((item) => item.id === 'eagle') ?? sofaObject;
+if (!sofaObject?.model || !eagleObject?.model) {
+  throw new Error('Lab requires sofa and eagle GLB paths in the manifest');
 }
 const sofaDef = sofaObject;
-const bookDef = bookObject;
-const birdDef = birdObject;
+const bookDef = eagleObject;
+const birdDef = eagleObject;
 
 let tab = 'conversion';
 const paused = false;

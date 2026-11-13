@@ -22,16 +22,6 @@
       "up": "y",
       "baseOffset": 0,
       "hotspot": { "type": "circle", "x": 0.5, "y": 0.5, "r": 0.4 }
-    },
-    {
-      "id": "duck",
-      "scene": "book",
-      "model": "assets/models/duck.glb",
-      "kind": "object",
-      "label": "duck",
-      "realSize": 0.22,
-      "up": "y",
-      "baseOffset": 0
     }
   ]
 }

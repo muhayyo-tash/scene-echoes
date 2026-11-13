@@ -61,7 +61,7 @@ npm run dev
 
 GitHub Pages stays on bundled models because API keys never ship to the browser.
 
-Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object=duck`, `?open=sofa`, `?handsless=1`, `?reset=1`, `?live=1`.
+Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object=eagle`, `?open=sofa`, `?handsless=1`, `?reset=1`, `?live=1`.
 
 ## Asset folder layout
 
