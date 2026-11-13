@@ -163,6 +163,13 @@ export class SceneEchoesApp {
   private photoSawOpenHand = false;
   /** Seconds the platform select has been held while the hand ray stays on the print. */
   private photoSelectHold = 0;
+  /**
+   * Empty-space scene pinch: Meta select hold progress (not tip-distance).
+   * Resets if the hand moves too far or select releases.
+   */
+  private sceneSelectHold = 0;
+  private sceneSelectOrigin: Vector3 | null = null;
+  private sceneSelectCooldown = 0;
   /** Bumped on timeout/cancel so a late GLB resolve cannot place after failure. */
   private conversionGen = 0;
   private desktopHold: {
@@ -337,6 +344,9 @@ export class SceneEchoesApp {
     this.hands.slide = slideL ?? slideR;
     this.hands.anyPinch = this.hands.left.pinched || this.hands.right.pinched;
     if (this.photoPinchCooldown > 0) this.photoPinchCooldown = Math.max(0, this.photoPinchCooldown - dt);
+    if (this.sceneSelectCooldown > 0) {
+      this.sceneSelectCooldown = Math.max(0, this.sceneSelectCooldown - dt);
+    }
     const lowest = [input.left?.wrist?.y, input.right?.wrist?.y].filter((n): n is number => n !== undefined);
     maybeDefaultFloor(
       this.surfaces,
@@ -355,8 +365,9 @@ export class SceneEchoesApp {
     );
     updateBookDetector(this.book, poseOpen, dt, config.bookOpenMemorySeconds);
 
-    if (this.hands.slide === 'left') this.openLibrary(input);
-    if (this.hands.slide === 'right') this.closeLibrary();
+    // Meta Echoes opens only via the dock icon + select — palm swipes are too
+    // easy to trip while gesturing and were opening the folder accidentally.
+    void this.hands.slide;
 
     this.updateHints(dt, input);
     this.updateExplorer(dt, input);
@@ -521,21 +532,11 @@ export class SceneEchoesApp {
       input.head.quaternion,
     );
     let hover: string | null = null;
-    const tips = [
-      this.hands.left.indexTip,
-      this.hands.right.indexTip,
-      this.hands.left.pinchPosition,
-      this.hands.right.pinchPosition,
-    ];
-    const pressing =
-      this.hands.left.justPinched ||
-      this.hands.right.justPinched ||
-      pokeSurface(this.hands.left, 0.01, dt) ||
-      pokeSurface(this.hands.right, 0.01, dt);
+    void dt;
 
-    // Invisible hand target-ray for Finder only (no white line). Point at a
-    // card/icon and pinch to open — fingertip poke still works as a fallback.
-    // Skip UI clicks while dragging Finder itself.
+    // Invisible hand target-ray (no white line). Commit only on Meta select
+    // (gamepad button 0 / selectstart) — tip-distance pinch is too twitchy and
+    // was opening Meta Echoes / cards without a deliberate pinch.
     for (const hand of [this.hands.left, this.hands.right]) {
       if (this.grab?.kind === 'explorer') break;
       const pinch = hand.pinchPosition;
@@ -549,7 +550,7 @@ export class SceneEchoesApp {
       }
       const target = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (target?.kind === 'card' && target.cardId) hover = target.cardId;
-      if (!hand.justPinched || !target) continue;
+      if (!hand.justSelected || !target) continue;
       if (target.kind === 'icon' && !this.space.explorerOpen && !this.space.photoOpen) {
         this.openLibrary(input);
         return;
@@ -571,39 +572,10 @@ export class SceneEchoesApp {
       }
     }
 
-    if (!this.space.explorerOpen && !this.space.photoOpen) {
-      for (const tip of tips) {
-        if (tip && this.explorer.hitIcon(tip, 0.14) && pressing) {
-          this.openLibrary(input);
-          return;
-        }
-      }
-    }
+    this.explorer.hover(hover);
     if (!this.space.explorerOpen || this.space.photoOpen) {
-      this.explorer.hover(hover);
       return;
     }
-    for (const tip of tips) {
-      if (!tip) continue;
-      if (this.explorer.hitClose(tip, 0.08) && pressing) {
-        this.closeLibrary();
-        return;
-      }
-      const folder = this.explorer.hitFolder(tip, 0.09);
-      if (folder && pressing) {
-        this.selectFolder(folder);
-        return;
-      }
-      const hit = this.explorer.hitTest(tip, 0.14);
-      if (hit) {
-        hover = hit.id;
-        if (pressing) {
-          void this.selectCard(hit.id, hit.type, input);
-          return;
-        }
-      }
-    }
-    this.explorer.hover(hover);
     for (const filmId of this.filmIds()) {
       const movie = this.films.get(filmId);
       if (movie.status === 'processing') this.explorer.processingVisual(filmId, movie.progress);
@@ -808,22 +780,67 @@ export class SceneEchoesApp {
       return;
     }
     this.photoSelectHold = 0;
-    this.updateSceneHold(input);
+    this.updateSceneHold(dt, input);
   }
 
-  private updateSceneHold(input: FrameInput): void {
-    if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen) return;
-    for (const hand of [this.hands.left, this.hands.right]) {
-      if (!hand.longPress.fired) continue;
-      const tip = hand.pinchPosition ?? hand.indexTip;
-      if (tip && this.explorer.hitIcon(tip, 0.12)) continue;
-      const origin = tip
-        ? new Vector3(tip.x, tip.y, tip.z)
-        : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
-      hand.longPress.fired = false;
-      void this.beginSceneCapture(origin);
+  /**
+   * Empty-space load: Meta select held ~0.45s with a stable hand, ray not on UI.
+   * Tip-distance / short long-press never commits (that was firing eagle by accident).
+   */
+  private updateSceneHold(dt: number, input: FrameInput): void {
+    if (
+      this.space.explorerOpen ||
+      this.space.movieOpen ||
+      this.space.photoOpen ||
+      this.converting ||
+      this.sceneSelectCooldown > 0
+    ) {
+      this.sceneSelectHold = 0;
+      this.sceneSelectOrigin = null;
       return;
     }
+
+    let holding: HandRuntime | null = null;
+    for (const hand of [this.hands.left, this.hands.right]) {
+      // Firm Meta pinch only (select + analog strength) — tip-distance ignored.
+      if (!hand.selectPressed || hand.selectValue < 0.75) continue;
+      // Aiming at the dock / any UI must never start a scene load.
+      const ui = this.uiKind(this.uiPick(hand)?.object ?? null);
+      if (ui) continue;
+      const tip = hand.pinchPosition ?? hand.indexTip;
+      if (tip && this.explorer.hitIcon(tip, 0.16)) continue;
+      holding = hand;
+      break;
+    }
+
+    if (!holding) {
+      this.sceneSelectHold = 0;
+      this.sceneSelectOrigin = null;
+      return;
+    }
+
+    const tip = holding.pinchPosition ?? holding.indexTip;
+    const pos = tip
+      ? new Vector3(tip.x, tip.y, tip.z)
+      : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
+
+    if (!this.sceneSelectOrigin) {
+      this.sceneSelectOrigin = pos.clone();
+      this.sceneSelectHold = 0;
+    } else if (pos.distanceTo(this.sceneSelectOrigin) > config.sceneSelectMoveTolerance) {
+      this.sceneSelectOrigin.copy(pos);
+      this.sceneSelectHold = 0;
+      return;
+    }
+
+    this.sceneSelectHold += dt;
+    if (this.sceneSelectHold < config.sceneSelectHoldSeconds) return;
+
+    this.sceneSelectHold = 0;
+    this.sceneSelectOrigin = null;
+    this.sceneSelectCooldown = config.sceneSelectCooldownSeconds;
+    holding.longPress.fired = false;
+    void this.beginSceneCapture(pos);
   }
 
   /** Spawn in clear view ahead of the headset (photo is dismissed before this). */

@@ -2,7 +2,7 @@
 
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Open **Meta Echoes** from the dock. A photo is the hold-to-convert flow for a prepared 3D object. Pinch in empty space for the scene / live-conversion flow. An MP4 in Meta Echoes is the movie flow.
+The headset starts as a clean view of your room. Point at the **Meta Echoes** dock icon and pinch (Meta select) to open it — there is no palm-swipe open. A photo is the hold-to-convert flow for a prepared 3D object. A deliberate pinch-and-hold in empty space runs the scene / live-conversion flow. An MP4 in Meta Echoes is the movie flow.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
 

@@ -43,6 +43,8 @@ export interface HandRuntime {
   justPinched: boolean;
   /** True while Meta select / gamepad button 0 is down (not tip-distance). */
   selectPressed: boolean;
+  /** Analog pinch 0–1 from gamepad.value when reported. */
+  selectValue: number;
   /** Rising edge of selectPressed — use for deliberate UI commits. */
   justSelected: boolean;
   velocity: Vec3;
@@ -78,6 +80,7 @@ function emptyHand(handedness: 'left' | 'right'): HandRuntime {
     joints: {},
     justPinched: false,
     selectPressed: false,
+    selectValue: 0,
     justSelected: false,
     velocity: { x: 0, y: 0, z: 0 },
     open: false,
@@ -120,6 +123,7 @@ export function updateHandRuntime(
     hand.joints = {};
     hand.justPinched = false;
     hand.selectPressed = false;
+    hand.selectValue = 0;
     hand.justSelected = false;
     return null;
   }
@@ -150,7 +154,14 @@ export function updateHandRuntime(
   const wasPinched = hand.pinched;
   const wasSelected = hand.selectPressed;
   // Platform select (Meta gamepad / selectstart) — separate from tip distance.
-  hand.selectPressed = sample.selectPressed === true;
+  hand.selectValue =
+    typeof sample.selectValue === 'number' && Number.isFinite(sample.selectValue)
+      ? Math.min(1, Math.max(0, sample.selectValue))
+      : sample.selectPressed === true
+        ? 1
+        : 0;
+  // Treat weak analog pinches as open — Meta commits near a firm pinch.
+  hand.selectPressed = sample.selectPressed === true && hand.selectValue >= 0.65;
   hand.justSelected = hand.selectPressed && !wasSelected;
   // Tip-contact still drives Finder pinch; photo-pop uses justSelected only.
   const tipPinched = updatePinch(
