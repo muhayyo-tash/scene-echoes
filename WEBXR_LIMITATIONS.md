@@ -88,10 +88,14 @@ after a sharp **~45s** wait (our old conversion timeout):
 3. Meshopt-compressed `sofa.glb` stalled until WASM finished — sometimes only
    after timeout — then a late place drew on the blurred mono view.
 4. PBR materials often read as black/invisible on passthrough.
+5. The open **2D photo print** sits ~0.7 m in front of the eyes — if it is not
+   dismissed on pop, it fully covers the sofa in immersive AR. The sofa then
+   only “appears” on the blurred Resume view from another camera angle.
 
 **What we do instead:** occlusion off; no jelly vertex patch; await
 `MeshoptDecoder.ready` on Enter / Meta Echoes open and warm the sofa GLB;
-placed meshes use **unlit** materials; conversion generation ignores late loads.
+dismiss + clear the photo **before** spawning; spawn ahead of the headset;
+keep original textured materials (not washed-out unlit); ignore late loads.
 
 ## AudioContext needs a user gesture
 

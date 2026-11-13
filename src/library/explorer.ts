@@ -293,6 +293,8 @@ export class FileExplorer {
     this.photoGroup.userData.photoPrint = false;
     this.photoGuideText = '';
     this.openPhoto = null;
+    // Drop children so a stale print cannot keep covering the room.
+    this.photoGroup.clear();
     this.dimOthers(null, false);
     this.group.visible = this.visible;
     this.iconGroup.visible = true;

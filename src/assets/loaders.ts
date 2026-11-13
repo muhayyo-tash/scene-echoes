@@ -1,13 +1,9 @@
 import {
   Box3,
-  Color,
   Group,
-  MeshBasicMaterial,
   Texture,
   TextureLoader,
   Vector3,
-  type Material,
-  type Mesh,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -144,30 +140,6 @@ export async function loadModel(object: ManifestObject): Promise<Group> {
     console.warn(warning);
   }
   return root;
-}
-
-/** Unlit materials so PBR sofas stay visible in Quest passthrough / multiview. */
-export function toUnlitArMaterials(root: Group): void {
-  root.traverse((child) => {
-    const mesh = child as Mesh;
-    if (!mesh.isMesh || !mesh.material) return;
-    mesh.frustumCulled = false;
-    mesh.visible = true;
-    const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    const next = source.map((mat: Material) => {
-      const std = mat as Material & {
-        map?: Texture | null;
-        color?: Color;
-      };
-      const basic = new MeshBasicMaterial({
-        map: std.map ?? null,
-        color: std.color ? std.color.clone() : new Color(0xcccccc),
-        toneMapped: false,
-      });
-      return basic;
-    });
-    mesh.material = (next.length === 1 ? next[0] : next) as Mesh['material'];
-  });
 }
 
 export function measureModel(root: Group): { width: number; height: number; depth: number; triangles: number } {

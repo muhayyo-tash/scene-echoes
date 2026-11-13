@@ -290,8 +290,7 @@ export class SceneEchoesApp {
         const { object, model } = this.pendingConverted;
         this.pendingConverted = null;
         const finished = this.conversion.finish() ?? model;
-        const spawn = this.spawnPoint(input);
-        void this.finishConversionPlace(object, finished, spawn);
+        this.finishConversionPlace(object, finished, input);
       }
       return;
     }
@@ -698,9 +697,8 @@ export class SceneEchoesApp {
       const { object, model } = this.pendingConverted;
       this.pendingConverted = null;
       const finished = this.conversion.finish() ?? model;
-      const spawn = this.spawnPoint(input);
       this.clearHandFeedback();
-      void this.finishConversionPlace(object, finished, spawn);
+      this.finishConversionPlace(object, finished, input);
       return;
     }
     if (this.converting) {
@@ -813,44 +811,31 @@ export class SceneEchoesApp {
     }
   }
 
+  /** Spawn in clear view ahead of the headset (photo is dismissed before this). */
   private spawnPoint(input: FrameInput): Vector3 {
-    // Always prefer a spot the user is already looking at (open photo), then
-    // fall back to head-forward. Avoid projecting onto bad XR planes that bury
-    // the mesh under the real floor.
     const forward = forwardFrom(input.head.quaternion);
-    const photo = this.explorer.openPhoto;
-    if (this.space.photoOpen && photo) {
-      photo.updateWorldMatrix(true, true);
-      const at = photo.getWorldPosition(new Vector3());
-      // Slightly toward the user and a bit below the print — stays in FOV.
-      const candidate = {
-        x: at.x * 0.85 + input.head.position.x * 0.15,
-        y: Math.min(at.y - 0.2, input.head.position.y - 0.85),
-        z: at.z * 0.85 + input.head.position.z * 0.15,
-      };
-      const surface = nearestHorizontal(this.surfaces.surfaces, candidate);
-      if (surface) {
-        const onFloor = projectOntoSurface(candidate, surface);
-        // If plane Y is absurdly far from the photo, ignore it (wrong plane).
-        if (Math.abs(onFloor.y - candidate.y) < 1.2) {
-          return new Vector3(onFloor.x, onFloor.y, onFloor.z);
-        }
-      }
-      return new Vector3(candidate.x, Math.max(input.head.position.y - 1.35, candidate.y), candidate.z);
-    }
     const chest = {
-      x: input.head.position.x + forward.x * 0.85,
-      y: input.head.position.y - 0.95,
-      z: input.head.position.z + forward.z * 0.85,
+      x: input.head.position.x + forward.x * 0.9,
+      y: input.head.position.y - 0.85,
+      z: input.head.position.z + forward.z * 0.9,
     };
     const surface = nearestHorizontal(this.surfaces.surfaces, chest);
     if (surface) {
       const onFloor = projectOntoSurface(chest, surface);
-      if (Math.abs(onFloor.y - chest.y) < 1.2) {
+      // Reject absurd planes that bury the mesh under the real floor.
+      if (Math.abs(onFloor.y - chest.y) < 1.0) {
         return new Vector3(onFloor.x, onFloor.y, onFloor.z);
       }
     }
     return new Vector3(chest.x, chest.y, chest.z);
+  }
+
+  /** Hide the open print immediately — it sits in front of the face and hides the sofa. */
+  private dismissOpenPhoto(): void {
+    this.explorer.closePhoto();
+    this.space = closePhoto(this.space);
+    this.photoSelectHold = 0;
+    this.conversion.group.visible = false;
   }
 
   private async beginSceneCapture(origin: Vector3): Promise<void> {
@@ -934,19 +919,18 @@ export class SceneEchoesApp {
     this.ghost.userData.anim = undefined;
   }
 
-  private async finishConversionPlace(
+  private finishConversionPlace(
     object: ManifestObject,
     model: Group,
-    spawn: Vector3,
-  ): Promise<void> {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    input: FrameInput,
+  ): void {
+    // Must dismiss the 2D print before spawning — it is ~0.7m in front of the
+    // eyes and completely covers any sofa placed near it.
+    this.dismissOpenPhoto();
+    const spawn = this.spawnPoint(input);
     this.placeConverted(object, model, spawn);
     this.audio.play('chime', spawn);
     this.converting = false;
-    if (this.space.photoOpen) {
-      this.explorer.closePhoto();
-      this.space = closePhoto(this.space);
-    }
   }
 
   private placeConverted(object: ManifestObject, model: Group, origin: Vector3): void {
@@ -962,11 +946,13 @@ export class SceneEchoesApp {
     }
     item.root.position.copy(origin);
     item.root.visible = true;
+    item.root.layers.enableAll();
     item.falling = false;
     const limited = applyObjectLimit(this.placedObjects, item, config.maxObjects);
     if (limited.removed) this.placed.remove(limited.removed.root);
     this.placedObjects = limited.objects;
     this.placed.visible = true;
+    this.placed.layers.enableAll();
     this.placed.add(item.root);
     this.carrying = null;
     this.grab = null;

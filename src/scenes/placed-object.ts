@@ -5,8 +5,8 @@ import {
   Vector3,
   Vector4,
 } from 'three';
+import { SRGBColorSpace, type Material, type Texture } from 'three';
 import type { ManifestObject } from '../assets/types.js';
-import { toUnlitArMaterials } from '../assets/loaders.js';
 import { config } from '../config.js';
 import {
   createJellySpring,
@@ -56,8 +56,32 @@ function attachLocalJelly(_model: Group): LocalJelly {
 /** Make GLB meshes reliably drawable in immersive AR passthrough. */
 export function prepareModelForAr(model: Group): void {
   model.visible = true;
-  // Unlit — PBR + Quest multiview often draws black / invisible until Resume.
-  toUnlitArMaterials(model);
+  model.frustumCulled = false;
+  model.traverse((child) => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.visible = true;
+    mesh.frustumCulled = false;
+    // XR cameras may use non-default layers; ensure we stay drawable.
+    mesh.layers.enableAll();
+    const mats = Array.isArray(mesh.material)
+      ? mesh.material
+      : mesh.material
+        ? [mesh.material]
+        : [];
+    for (const mat of mats as Material[]) {
+      if (!mat) continue;
+      mat.transparent = false;
+      mat.depthTest = true;
+      mat.depthWrite = true;
+      mat.needsUpdate = true;
+      const withMap = mat as Material & { map?: Texture | null };
+      if (withMap.map) {
+        withMap.map.colorSpace = SRGBColorSpace;
+        withMap.map.needsUpdate = true;
+      }
+    }
+  });
 }
 
 function applyLocalJelly(item: PlacedObject): void {
