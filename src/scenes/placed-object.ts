@@ -4,9 +4,9 @@ import {
   Mesh,
   Vector3,
   Vector4,
-  type Material,
 } from 'three';
 import type { ManifestObject } from '../assets/types.js';
+import { toUnlitArMaterials } from '../assets/loaders.js';
 import { config } from '../config.js';
 import {
   createJellySpring,
@@ -56,32 +56,8 @@ function attachLocalJelly(_model: Group): LocalJelly {
 /** Make GLB meshes reliably drawable in immersive AR passthrough. */
 export function prepareModelForAr(model: Group): void {
   model.visible = true;
-  model.traverse((child) => {
-    const mesh = child as Mesh;
-    if (!mesh.isMesh) return;
-    mesh.visible = true;
-    // XR camera frustum culling is often wrong for freshly placed content.
-    mesh.frustumCulled = false;
-    const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-    for (const mat of mats) {
-      if (!mat) continue;
-      mat.transparent = false;
-      mat.depthTest = true;
-      mat.depthWrite = true;
-      mat.needsUpdate = true;
-      const std = mat as Material & {
-        emissive?: { setRGB: (r: number, g: number, b: number) => void };
-        metalness?: number;
-        roughness?: number;
-        envMapIntensity?: number;
-      };
-      // Slight lift so PBR sofas read against bright passthrough.
-      std.emissive?.setRGB(0.08, 0.08, 0.08);
-      if (typeof std.metalness === 'number') std.metalness = Math.min(std.metalness, 0.35);
-      if (typeof std.roughness === 'number') std.roughness = Math.max(std.roughness, 0.45);
-      if (typeof std.envMapIntensity === 'number') std.envMapIntensity = Math.max(std.envMapIntensity, 1);
-    }
-  });
+  // Unlit — PBR + Quest multiview often draws black / invisible until Resume.
+  toUnlitArMaterials(model);
 }
 
 function applyLocalJelly(item: PlacedObject): void {

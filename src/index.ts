@@ -138,6 +138,12 @@ void (async () => {
 
   enter?.addEventListener('click', async () => {
     try {
+      const { ensureMeshoptDecoder } = await import('./assets/loaders.js');
+      await ensureMeshoptDecoder();
+    } catch {
+      /* meshopt warms again on first GLB */
+    }
+    try {
       await app.startAudio();
     } catch {
       /* audio is optional in the desktop preview */

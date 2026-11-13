@@ -78,20 +78,20 @@ a machine with secrets (local `/v1/*` proxy). On Pages, conversion falls back to
 the **bundled sofa GLB** via the manifest model source. Live mode is
 laptop-only (`CONVERSION_API_URL` + `?live=1`), not the competition URL.
 
-## Depth sensing + custom shaders can hide models until Resume
+## Depth sensing + shaders + meshopt can hide models until Resume
 
-Two separate bugs made a placed sofa vanish in immersive AR and only show when
-Quest Browser showed **Resume** (session blurred / mono redraw):
+Placed sofas vanished in immersive AR and only showed on Quest **Resume**, often
+after a sharp **~45s** wait (our old conversion timeout):
 
 1. `enableOcclusion: true` could wipe passthrough-composited meshes.
-2. The local jelly `onBeforeCompile` shader used `inverse(modelMatrix)`, which
-   breaks under WebXR multiview — materials draw in the flat browser view but
-   not in the headset.
+2. Jelly `inverse(modelMatrix)` broke under WebXR multiview.
+3. Meshopt-compressed `sofa.glb` stalled until WASM finished — sometimes only
+   after timeout — then a late place drew on the blurred mono view.
+4. PBR materials often read as black/invisible on passthrough.
 
-**What we do instead:** occlusion stays off until meshes opt in with
-`DepthOccludable`; jelly spring squash remains, but the custom vertex patch is
-not applied; lights are brighter for passthrough; placed meshes set
-`frustumCulled = false`.
+**What we do instead:** occlusion off; no jelly vertex patch; await
+`MeshoptDecoder.ready` on Enter / Meta Echoes open and warm the sofa GLB;
+placed meshes use **unlit** materials; conversion generation ignores late loads.
 
 ## AudioContext needs a user gesture
 

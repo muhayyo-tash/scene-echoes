@@ -1,9 +1,13 @@
 import {
   Box3,
+  Color,
   Group,
+  MeshBasicMaterial,
   Texture,
   TextureLoader,
   Vector3,
+  type Material,
+  type Mesh,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -14,10 +18,29 @@ import { overTriangleBudget, sizeDisagrees } from './validate.js';
 
 const textureLoader = new TextureLoader();
 const gltfLoader = new GLTFLoader();
-gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
 export const modelWarnings: string[] = [];
 const modelCache = new Map<string, Group>();
+
+let meshoptReady: Promise<void> | null = null;
+
+/**
+ * Quest Browser can stall for tens of seconds on the first meshopt GLB if WASM
+ * has not finished instantiating. Await this before any load (ideally at boot).
+ */
+export function ensureMeshoptDecoder(): Promise<void> {
+  if (!meshoptReady) {
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+    meshoptReady = Promise.resolve(MeshoptDecoder.ready as PromiseLike<unknown>)
+      .then(() => {
+        console.info('[scene-echoes] meshopt decoder ready');
+      })
+      .catch((error) => {
+        console.warn('[scene-echoes] meshopt decoder failed', error);
+      });
+  }
+  return meshoptReady;
+}
 
 export function assetUrl(path: string): string {
   const base = import.meta.env.BASE_URL ?? './';
@@ -62,6 +85,7 @@ export function cacheModelTemplate(id: string, template: Group): void {
 }
 
 export async function loadGlbBytes(bytes: ArrayBuffer): Promise<Group> {
+  await ensureMeshoptDecoder();
   return new Promise((resolve, reject) => {
     gltfLoader.parse(
       bytes,
@@ -72,17 +96,38 @@ export async function loadGlbBytes(bytes: ArrayBuffer): Promise<Group> {
   });
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function loadModel(object: ManifestObject): Promise<Group> {
   if (!object.model) {
     throw new Error(`Object ${object.id} has no GLB path`);
   }
+  await ensureMeshoptDecoder();
   const cached = modelCache.get(object.id);
   if (cached) {
     const clone = cached.clone(true);
     applyManifestScale(clone, object);
     return clone;
   }
-  const gltf = await gltfLoader.loadAsync(assetUrl(object.model));
+  const url = assetUrl(object.model);
+  console.info('[scene-echoes] loading glb', object.id, url);
+  const started = performance.now();
+  const gltf = await withTimeout(gltfLoader.loadAsync(url), 20_000, `GLB ${object.id}`);
+  console.info('[scene-echoes] glb ready', object.id, `${(performance.now() - started).toFixed(0)}ms`);
   const template = gltf.scene;
   const triangles = countTriangles(template);
   if (overTriangleBudget(triangles) && debugParams.debug) {
@@ -99,6 +144,30 @@ export async function loadModel(object: ManifestObject): Promise<Group> {
     console.warn(warning);
   }
   return root;
+}
+
+/** Unlit materials so PBR sofas stay visible in Quest passthrough / multiview. */
+export function toUnlitArMaterials(root: Group): void {
+  root.traverse((child) => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+    mesh.frustumCulled = false;
+    mesh.visible = true;
+    const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const next = source.map((mat: Material) => {
+      const std = mat as Material & {
+        map?: Texture | null;
+        color?: Color;
+      };
+      const basic = new MeshBasicMaterial({
+        map: std.map ?? null,
+        color: std.color ? std.color.clone() : new Color(0xcccccc),
+        toneMapped: false,
+      });
+      return basic;
+    });
+    mesh.material = (next.length === 1 ? next[0] : next) as Mesh['material'];
+  });
 }
 
 export function measureModel(root: Group): { width: number; height: number; depth: number; triangles: number } {

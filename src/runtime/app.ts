@@ -20,7 +20,7 @@ import { config } from '../config.js';
 import { debugParams } from '../debug/params.js';
 import { parseExplorer, parseManifest } from '../assets/validate.js';
 import type { ExplorerEntry, ManifestObject, TimelineFile } from '../assets/types.js';
-import { cacheModelTemplate, loadGlbBytes, loadModel } from '../assets/loaders.js';
+import { cacheModelTemplate, ensureMeshoptDecoder, loadGlbBytes, loadModel } from '../assets/loaders.js';
 import bundledManifest from '../../public/assets/manifest.json';
 import bundledExplorer from '../../public/assets/explorer.json';
 import bundledFilms from '../../public/assets/movie/films.json';
@@ -158,6 +158,8 @@ export class SceneEchoesApp {
   private photoSawOpenHand = false;
   /** Seconds the platform select has been held while the hand ray stays on the print. */
   private photoSelectHold = 0;
+  /** Bumped on timeout/cancel so a late GLB resolve cannot place after failure. */
+  private conversionGen = 0;
   private desktopHold: {
     x: number;
     y: number;
@@ -194,6 +196,9 @@ export class SceneEchoesApp {
   }
 
   async boot(): Promise<void> {
+    // Instantiate meshopt WASM before any Quest pinch — otherwise the first GLB
+    // stalls ~45s (our conversion timeout) and only appears after Resume.
+    void ensureMeshoptDecoder();
     const manifest = parseManifest(bundledManifest);
     const explorer = parseExplorer(bundledExplorer);
     this.objects = manifest.manifest.objects;
@@ -390,6 +395,15 @@ export class SceneEchoesApp {
       y: this.explorer.group.position.y,
       z: this.explorer.group.position.z,
     });
+    // Warm decoder + sofa while the user browses — pop should then be a cache hit.
+    void ensureMeshoptDecoder();
+    for (const object of this.objects) {
+      if (object.model) {
+        void loadModel(object).catch((error) => {
+          console.warn('[scene-echoes] warm model failed', object.id, error);
+        });
+      }
+    }
     if (this.space.movieOpen) this.screen.pauseForExplorer(true);
     if (debugParams.openId) {
       void this.openPhotoCard(debugParams.openId, input);
@@ -696,15 +710,17 @@ export class SceneEchoesApp {
       if (this.space.photoOpen && Math.floor(this.convertingSince) !== Math.floor(this.convertingSince - dt)) {
         this.explorer.setPhotoGuide(`Loading 3D model… ${Math.floor(this.convertingSince)}s`);
       }
-      if (!this.pendingConverted && this.convertingSince > 45) {
+      if (!this.pendingConverted && this.convertingSince > 20) {
         console.warn('[scene-echoes] conversion timed out');
+        this.conversionGen += 1;
         this.conversion.finish();
         this.converting = false;
         this.convertingSince = 0;
+        this.pendingConverted = null;
         this.space.space = this.space.photoOpen ? 'photo' : 'clean';
         this.audio.play('thud');
         if (this.space.photoOpen) {
-          this.explorer.setPhotoGuide('Load timed out · point at photo and pinch again');
+          this.explorer.setPhotoGuide('Load timed out · open Meta Echoes again, then pinch');
         }
       }
       return;
@@ -875,6 +891,7 @@ export class SceneEchoesApp {
   ): Promise<void> {
     if (this.pendingConverted) return;
     const already = this.converting;
+    const gen = ++this.conversionGen;
     this.converting = true;
     this.convertingSince = 0;
     this.space.space = 'converting';
@@ -887,13 +904,19 @@ export class SceneEchoesApp {
       if (this.space.photoOpen) {
         this.explorer.setPhotoGuide('Loading 3D model…');
       }
+      await ensureMeshoptDecoder();
       const handle = await this.modelSource.request(id, point);
+      if (gen !== this.conversionGen) {
+        console.warn('[scene-echoes] ignoring late conversion', id);
+        return;
+      }
       const model = handle.root as Group;
       model.visible = true;
       this.conversion.attachModel(model);
       this.conversionElapsed = 0;
       this.pendingConverted = { object: handle.object, model, origin };
     } catch (error) {
+      if (gen !== this.conversionGen) return;
       console.warn('[scene-echoes] conversion failed', error);
       this.conversion.finish();
       this.converting = false;
@@ -901,7 +924,7 @@ export class SceneEchoesApp {
       this.space.space = this.space.photoOpen ? 'photo' : this.space.explorerOpen ? 'explorer' : 'clean';
       this.audio.play('thud', origin);
       if (this.space.photoOpen) {
-        this.explorer.setPhotoGuide('Load failed · point at photo and pinch again');
+        this.explorer.setPhotoGuide('Load failed · open Meta Echoes again, then pinch');
       }
     }
   }
