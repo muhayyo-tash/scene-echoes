@@ -73,13 +73,30 @@ export class VideoScreen {
   }
 
   place(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
+    this.applyScreenSize(config.videoScreenWidth);
     this.group.visible = true;
+    this.group.scale.setScalar(1);
+    this.scale = 1;
+    // Slightly below eye height so it reads as a big panel, not a HUD overlay.
+    const y = head.y - 0.05;
     this.group.position.set(
       head.x + forward.x * config.videoScreenDistance,
-      head.y,
+      y,
       head.z + forward.z * config.videoScreenDistance,
     );
-    this.group.lookAt(head.x, head.y, head.z);
+    this.group.lookAt(head.x, y, head.z);
+  }
+
+  /** Rebuild planes from current config so width changes apply at open time. */
+  private applyScreenSize(width: number): void {
+    const height = width * (9 / 16);
+    this.mesh.geometry.dispose();
+    this.mesh.geometry = new PlaneGeometry(width, height);
+    const glow = this.group.children.find((child) => child !== this.mesh) as Mesh | undefined;
+    if (glow?.isMesh) {
+      glow.geometry.dispose();
+      glow.geometry = new PlaneGeometry(width * 1.04, height * 1.04);
+    }
   }
 
   async play(at = 0): Promise<void> {

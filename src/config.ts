@@ -36,8 +36,9 @@ const numericDefaults = {
   jellyStiffness: 90,
   jellyDamping: 8,
   objectBounces: 2,
-  videoScreenWidth: 1.1,
-  videoScreenDistance: 1.4,
+  /** Floating cinema screen — large but not full-FOV. */
+  videoScreenWidth: 1.85,
+  videoScreenDistance: 1.55,
   momentLeadSeconds: 1,
   popOutSeconds: 1.2,
   maxMovieObjects: 2,

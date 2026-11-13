@@ -1328,7 +1328,14 @@ export class SceneEchoesApp {
 
   private async openMovie(input: FrameInput): Promise<void> {
     this.space = openMovie(this.space);
-    this.explorer.setOpen(false, { x: 0, y: 0, z: 0 }, { x: 0, z: -1 });
+    // Same as photo: folder must leave so only the big screen remains.
+    this.explorer.setOpen(false, {
+      x: input.head.position.x,
+      y: input.head.position.y,
+      z: input.head.position.z,
+    }, forwardFrom(input.head.quaternion));
+    this.explorer.group.visible = false;
+    this.explorer.visible = false;
     const forward = forwardFrom(input.head.quaternion);
     this.screen.place(input.head.position, forward);
     await this.screen.play(debugParams.startTime ?? 0);
