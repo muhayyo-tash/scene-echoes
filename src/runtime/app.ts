@@ -490,15 +490,20 @@ export class SceneEchoesApp {
       [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
       true,
     );
-    // Prefer a real target (photo print / card / icon), not a label/shadow hitchhiker.
-    const hit =
-      hits.find((entry) => entry.object.visible && this.uiKind(entry.object)) ??
+    // Prefer cards/icons over the title-bar move strip when the ray grazes both.
+    const ranked = hits.filter((entry) => entry.object.visible && this.uiKind(entry.object));
+    const preferred =
+      ranked.find((entry) => {
+        const kind = this.uiKind(entry.object)?.kind;
+        return kind === 'card' || kind === 'icon' || kind === 'close' || kind === 'folder' || kind === 'photo';
+      }) ??
+      ranked[0] ??
       hits.find((entry) => entry.object.visible);
-    return hit ? { object: hit.object, point: hit.point } : null;
+    return preferred ? { object: preferred.object, point: preferred.point } : null;
   }
 
   private uiKind(object: Object3D | null): {
-    kind: 'icon' | 'close' | 'folder' | 'card' | 'photo';
+    kind: 'icon' | 'close' | 'folder' | 'card' | 'photo' | 'move';
     folder?: FinderSection;
     cardId?: string;
   } | null {
@@ -510,12 +515,15 @@ export class SceneEchoesApp {
         folder?: FinderSection;
         cardId?: string;
         photoPrint?: boolean;
+        finderMove?: boolean;
       };
+      // Prefer interactive targets over the title-bar strip when both are hit.
+      if (data.cardId) return { kind: 'card', cardId: data.cardId };
       if (data.appIcon) return { kind: 'icon' };
       if (data.close) return { kind: 'close' };
       if (data.folder) return { kind: 'folder', folder: data.folder };
-      if (data.cardId) return { kind: 'card', cardId: data.cardId };
       if (data.photoPrint) return { kind: 'photo' };
+      if (data.finderMove) return { kind: 'move' };
       current = current.parent;
     }
     return null;
@@ -534,38 +542,36 @@ export class SceneEchoesApp {
     let hover: string | null = null;
     void dt;
 
-    // Invisible hand target-ray (no white line). Commit only on Meta select
-    // (gamepad button 0 / selectstart) — tip-distance pinch is too twitchy and
-    // was opening Meta Echoes / cards without a deliberate pinch.
+    // Invisible hand target-ray. Cards/sidebar/close win over title-bar drag.
+    // Inside Meta Echoes: Meta select OR tip-pinch while the ray is on a target
+    // (ray aim keeps tip from opening random cards). Dock icon stays select-only.
     for (const hand of [this.hands.left, this.hands.right]) {
-      if (this.grab?.kind === 'explorer') break;
-      const pinch = hand.pinchPosition;
-      if (
-        this.space.explorerOpen &&
-        !this.space.photoOpen &&
-        pinch &&
-        this.explorer.hitMoveHandle(pinch, 0.16)
-      ) {
-        continue;
-      }
       const target = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (target?.kind === 'card' && target.cardId) hover = target.cardId;
-      if (!hand.justSelected || !target) continue;
+      const commitUi =
+        hand.justSelected ||
+        (hand.justPinched && target !== null && target.kind !== 'icon' && target.kind !== 'move');
+      if (!commitUi || !target || target.kind === 'move') continue;
       if (target.kind === 'icon' && !this.space.explorerOpen && !this.space.photoOpen) {
+        if (!hand.justSelected) continue;
         this.openLibrary(input);
         return;
       }
       if (target.kind === 'close' && this.space.explorerOpen && !this.space.photoOpen) {
+        if (this.grab?.kind === 'explorer') this.releaseGrab();
         this.closeLibrary();
         return;
       }
       if (target.kind === 'folder' && target.folder && this.space.explorerOpen && !this.space.photoOpen) {
+        if (this.grab?.kind === 'explorer') this.releaseGrab();
         this.selectFolder(target.folder);
         return;
       }
       if (target.kind === 'card' && target.cardId && this.space.explorerOpen && !this.space.photoOpen) {
         const card = this.explorer.cards.find((item) => item.id === target.cardId);
         if (card) {
+          // Opening a photo always wins over an accidental title-bar drag.
+          if (this.grab?.kind === 'explorer') this.releaseGrab();
           void this.selectCard(card.id, card.type, input);
           return;
         }
@@ -1049,8 +1055,15 @@ export class SceneEchoesApp {
       const p = activeHand.pinchPosition;
       if (this.space.explorerOpen && !this.space.photoOpen) {
         const ui = this.uiKind(this.uiPick(activeHand)?.object ?? null);
-        const onInteractive = ui?.kind === 'card' || ui?.kind === 'close' || ui?.kind === 'folder';
-        if (!onInteractive && this.explorer.hitMoveHandle(p, 0.2)) {
+        // Never drag the window when the ray is on a card/control.
+        if (ui && ui.kind !== 'move') {
+          /* fall through to object grabs */
+        } else if (
+          // Skip the pinch-down frame so card open can claim the same select.
+          !activeHand.justPinched &&
+          !activeHand.justSelected &&
+          (ui?.kind === 'move' || this.explorer.hitMoveHandle(p, 0.02))
+        ) {
           this.grabOffset.set(
             this.explorer.group.position.x - p.x,
             this.explorer.group.position.y - p.y,

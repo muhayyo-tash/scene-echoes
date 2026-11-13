@@ -82,6 +82,14 @@ export class FileExplorer {
       );
       mesh.position.set(layout.x, layout.y, 0.012);
       mesh.userData.cardId = layout.id;
+      // Larger invisible hit plate so Quest hand-rays land on the thumbnail
+      // instead of the title-bar / empty chrome behind it.
+      const cardHit = new Mesh(
+        new PlaneGeometry(layout.width * 1.45, layout.height * 1.55),
+        new MeshBasicMaterial({ visible: false, side: DoubleSide }),
+      );
+      cardHit.position.set(layout.x, layout.y, 0.014);
+      cardHit.userData.cardId = layout.id;
       const glow = new Mesh(
         new PlaneGeometry(layout.width * 1.12, layout.height * 1.12),
         new MeshBasicMaterial({
@@ -101,7 +109,7 @@ export class FileExplorer {
       label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
       // Labels must not steal the hand-ray from the card mesh.
       label.raycast = () => undefined;
-      this.group.add(glow, mesh, label);
+      this.group.add(glow, mesh, cardHit, label);
       const card: ExplorerCard = { id: layout.id, type: layout.type, mesh, layout, glow, label };
       this.cards.push(card);
     }
@@ -160,19 +168,20 @@ export class FileExplorer {
     this.group.lookAt(lookAt.x, lookAt.y, lookAt.z);
   }
 
-  hitMoveHandle(point: { x: number; y: number; z: number }, radius = 0.12): boolean {
+  /**
+   * Title-bar drag only (local AABB on the chrome strip). Cards / close /
+   * sidebar always win so photo pinches are never treated as window moves.
+   */
+  hitMoveHandle(point: { x: number; y: number; z: number }, _radius = 0.02): boolean {
     if (!this.visible || !this.group.visible) return false;
-    // Large title-bar grab first so cards cannot steal the drag.
-    this.moveHit.updateWorldMatrix(true, true);
-    this.moveHit.getWorldPosition(this.world);
-    if (this.world.distanceTo(point as never) < Math.max(radius, 0.22)) return true;
-    if (this.hitClose(point, 0.06) || this.hitFolder(point, 0.07) || this.hitTest(point, 0.09)) {
+    if (this.hitClose(point, 0.06) || this.hitFolder(point, 0.07) || this.hitTest(point, 0.1)) {
       return false;
     }
-    // Empty chrome / panel edges are also draggable.
-    this.panel.updateWorldMatrix(true, true);
-    this.panel.getWorldPosition(this.world);
-    return this.world.distanceTo(point as never) < Math.max(radius, FINDER_WIDTH * 0.48);
+    this.moveHit.updateWorldMatrix(true, true);
+    this.moveHit.worldToLocal(this.world.set(point.x, point.y, point.z));
+    const hw = (FINDER_WIDTH * 0.92) * 0.5 + 0.01;
+    const hh = (FINDER_HEIGHT * 0.18) * 0.5 + 0.01;
+    return Math.abs(this.world.x) <= hw && Math.abs(this.world.y) <= hh && Math.abs(this.world.z) <= 0.04;
   }
 
   hover(id: string | null): void {
