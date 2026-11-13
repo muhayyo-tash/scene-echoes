@@ -18,69 +18,6 @@ Aligned with [Meta’s hands interaction types](https://developers.meta.com/hori
 - **Fist** — close the hand and hold ~0.7s in empty space (not while aiming at UI). This is the scene-capture gesture for **both** the Gemini → Hugging Face API path and the offline eagle fallback. Pinch alone will not spawn scene models.
 - **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch-and-hold on the open 2D print to pop its 3D model.
 
-## Who it is for
-
-Ages 12 and up. Meta requires a parent-managed account for ages 10 to 12, and age limits can differ by country. Everything in the app is meant to follow Meta's 10+ content guidelines: gentle, with nothing scary or violent.
-
-## Asset folder layout
-
-Prepared demo assets live under `public/assets/`:
-
-```
-public/assets/
-  explorer.json          # which items appear in Meta Echoes (photos / films)
-  manifest.json          # id → photo + model paths, size, hotspot
-  photos/                # 2D images shown in Meta Echoes
-    sofa.jpg             # competition photo (jury path)
-  masks/                 # optional cutout masks
-  models/                # pre-baked GLBs
-    sofa.glb             # keep for submission — Meta Echoes sofa pop
-    eagle.glb            # empty-space fist demo stand-in (safe to remove before submit)
-    duck.glb             # book / legacy sample
-  movie/                 # optional MP4 films + timeline
-```
-
-| Path | Role |
-| --- | --- |
-| `public/assets/photos/` | 2D images for Meta Echoes cards |
-| `public/assets/models/` | Matching GLBs (and scene-pinch demos) |
-| `public/assets/manifest.json` | Registers every object the runtime can load |
-| `public/assets/explorer.json` | Subset listed in the Meta Echoes UI |
-
-**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. `eagle.glb` is only for empty-space fist when live APIs are unavailable; remove it (and its `manifest.json` entry) before submit if you want a leaner package.
-
-## Adding a photo to Meta Echoes
-
-1. Drop the 2D image at `public/assets/photos/<id>.jpg` (or `.png`).
-2. Drop the matching GLB at `public/assets/models/<id>.glb`.
-3. Add an object in `public/assets/manifest.json`:
-
-```json
-{
-  "id": "lamp",
-  "scene": "object3d",
-  "photo": "assets/photos/lamp.jpg",
-  "model": "assets/models/lamp.glb",
-  "kind": "object",
-  "label": "lamp",
-  "realSize": 0.4,
-  "up": "y",
-  "baseOffset": 0,
-  "hotspot": { "type": "circle", "x": 0.5, "y": 0.45, "r": 0.3 }
-}
-```
-
-4. List it in `public/assets/explorer.json`:
-
-```json
-[
-  { "type": "photo", "id": "sofa" },
-  { "type": "photo", "id": "lamp" }
-]
-```
-
-Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the open print loads that GLB.
-
 ## How to run locally
 
 Needs Node.js 20.19 or newer.
@@ -118,13 +55,72 @@ npm run dev
 3. On Quest (same LAN), open the printed HTTPS URL, enter XR, then:
 
 - **Meta Echoes photo pinch** → Gemini names the marked object → SAM 3D Objects (Hugging Face) rebuilds a GLB → object appears in the room. If the API fails, the bundled model for that photo is used when allowed.
-- **Empty-space pinch** → headset still → same Gemini → HF pipeline. If capture or conversion fails, the app falls back to `eagle.glb`.
+- **Empty-space fist** → headset still → same Gemini → HF pipeline. If capture or conversion fails, the app falls back to `eagle.glb`.
 
 `docs/CONVERSION_API.md` describes the JSON contract. Standalone server (optional): `npm run conversion-server`.
 
 GitHub Pages stays on bundled models because API keys never ship to the browser.
 
 Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object=duck`, `?open=sofa`, `?handsless=1`, `?reset=1`, `?live=1`.
+
+## Asset folder layout
+
+Prepared demo assets live under `public/assets/`:
+
+```
+public/assets/
+  explorer.json          # which items appear in Meta Echoes (photos / films)
+  manifest.json          # id → photo + model paths, size, hotspot
+  photos/                # 2D images shown in Meta Echoes
+    sofa.jpg             # competition photo (jury path)
+  masks/                 # optional cutout masks
+  models/                # pre-baked GLBs
+    sofa.glb             # keep for submission — Meta Echoes sofa pop
+    eagle.glb            # empty-space fist demo stand-in (safe to remove before submit)
+    duck.glb             # book / legacy sample
+  movie/                 # optional MP4 films + timeline
+```
+
+| Path | Role |
+| --- | --- |
+| `public/assets/photos/` | 2D images for Meta Echoes cards |
+| `public/assets/models/` | Matching GLBs (and scene-fist demos) |
+| `public/assets/manifest.json` | Registers every object the runtime can load |
+| `public/assets/explorer.json` | Subset listed in the Meta Echoes UI |
+
+**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. `eagle.glb` is only for empty-space fist when live APIs are unavailable; remove it (and its `manifest.json` entry) before submit if you want a leaner package.
+
+## Adding a photo to Meta Echoes
+
+1. Drop the 2D image at `public/assets/photos/<id>.jpg` (or `.png`).
+2. Drop the matching GLB at `public/assets/models/<id>.glb`.
+3. Add an object in `public/assets/manifest.json`:
+
+```json
+{
+  "id": "lamp",
+  "scene": "object3d",
+  "photo": "assets/photos/lamp.jpg",
+  "model": "assets/models/lamp.glb",
+  "kind": "object",
+  "label": "lamp",
+  "realSize": 0.4,
+  "up": "y",
+  "baseOffset": 0,
+  "hotspot": { "type": "circle", "x": 0.5, "y": 0.45, "r": 0.3 }
+}
+```
+
+4. List it in `public/assets/explorer.json`:
+
+```json
+[
+  { "type": "photo", "id": "sofa" },
+  { "type": "photo", "id": "lamp" }
+]
+```
+
+Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the open print loads that GLB.
 
 ## Adding a film
 
