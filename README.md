@@ -109,22 +109,3 @@ Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the op
 ## Adding a film
 
 Drop an MP4 in `public/assets/movie/`. Meta Echoes Movies lists each file. Click it to process that video (frames every 6 seconds, at most 4 SAM 3D reconstructions). No bundled fox, flamingo, or park clip.
-
-## How it was built
-
-TypeScript WebXR on the Immersive Web SDK. Hand input, Meta Echoes, conversion reveal, book pose, movie timeline and object squash are custom. Scene understanding, optional depth occlusion and SDK grabbing are enabled in `iwsdk.config.json`.
-
-## Scripts
-
-| Script | What it does |
-| --- | --- |
-| `npm run download-models` | Fetches the duck GLB if missing |
-| `npm run generate-placeholders` | Builds the sofa photo, mask and film poster if missing |
-| `npm run optimize-models` | Recenter, scale, simplify, compress GLBs |
-| `npm run optimize-video -- <file>` | H.264 MP4 under 50 MB, written into `public/assets/movie/` |
-| `npm run validate-timeline` | Checks `timeline.json` |
-| `npm run conversion-server` | Standalone Gemini + SAM 3D server |
-| `npm test` | Unit tests |
-| `npm run build` | Production build |
-
-Animation lab (desktop only, not linked from the landing page): `/lab.html`.
