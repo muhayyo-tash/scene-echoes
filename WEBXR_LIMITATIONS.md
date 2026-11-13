@@ -78,15 +78,20 @@ a machine with secrets (local `/v1/*` proxy). On Pages, conversion falls back to
 the **bundled sofa GLB** via the manifest model source. Live mode is
 laptop-only (`CONVERSION_API_URL` + `?live=1`), not the competition URL.
 
-## Depth sensing can eat nearby UI (and whole models)
+## Depth sensing + custom shaders can hide models until Resume
 
-With `enableOcclusion: true`, virtual content can vanish in immersive AR
-passthrough and only reappear when the session blurs (Quest Browser **Resume**
-screen). That looked like “the sofa only shows in the browser.”
+Two separate bugs made a placed sofa vanish in immersive AR and only show when
+Quest Browser showed **Resume** (session blurred / mono redraw):
 
-**What we do instead:** `DepthSensingSystem` keeps the depth texture but
-`enableOcclusion: false` until meshes explicitly opt in with `DepthOccludable`.
-Meta Echoes dock materials also use `depthTest: false` / high `renderOrder`.
+1. `enableOcclusion: true` could wipe passthrough-composited meshes.
+2. The local jelly `onBeforeCompile` shader used `inverse(modelMatrix)`, which
+   breaks under WebXR multiview — materials draw in the flat browser view but
+   not in the headset.
+
+**What we do instead:** occlusion stays off until meshes opt in with
+`DepthOccludable`; jelly spring squash remains, but the custom vertex patch is
+not applied; lights are brighter for passthrough; placed meshes set
+`frustumCulled = false`.
 
 ## AudioContext needs a user gesture
 

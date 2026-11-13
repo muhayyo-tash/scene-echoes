@@ -5,9 +5,10 @@ import {
 } from 'three';
 
 export function createFallbackLights(scene: Scene): { hemi: HemisphereLight; dir: DirectionalLight } {
-  const hemi = new HemisphereLight(0xfff2dd, 0x2a2a28, 0.85);
-  const dir = new DirectionalLight(0xffe6c8, 0.35);
-  dir.position.set(0.4, 2.2, 0.6);
+  // Bright enough to read PBR meshes against Quest passthrough (dim lights look “missing”).
+  const hemi = new HemisphereLight(0xffffff, 0x5a5a58, 1.55);
+  const dir = new DirectionalLight(0xfff5e8, 1.15);
+  dir.position.set(0.5, 2.4, 0.8);
   dir.castShadow = false;
   scene.add(hemi, dir);
   return { hemi, dir };

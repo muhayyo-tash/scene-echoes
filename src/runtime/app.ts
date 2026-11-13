@@ -62,7 +62,6 @@ import {
   updateBookDetector,
   type BookDetector,
 } from '../core/book.js';
-import { spawnInFront } from '../core/placement.js';
 import { applyObjectLimit } from '../core/object-limit.js';
 import { createFallbackLights } from '../core/lighting.js';
 import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/ghost-hand.js';
@@ -799,42 +798,43 @@ export class SceneEchoesApp {
   }
 
   private spawnPoint(input: FrameInput): Vector3 {
-    // From an open photo: drop the model under the print so it stays in view.
-    // (Head-forward floor spawn often landed out of FOV or under a bad plane.)
+    // Always prefer a spot the user is already looking at (open photo), then
+    // fall back to head-forward. Avoid projecting onto bad XR planes that bury
+    // the mesh under the real floor.
+    const forward = forwardFrom(input.head.quaternion);
     const photo = this.explorer.openPhoto;
     if (this.space.photoOpen && photo) {
       photo.updateWorldMatrix(true, true);
       const at = photo.getWorldPosition(new Vector3());
-      const towardHead = {
-        x: input.head.position.x - at.x,
-        y: 0,
-        z: input.head.position.z - at.z,
-      };
-      const len = Math.hypot(towardHead.x, towardHead.z) || 1;
+      // Slightly toward the user and a bit below the print — stays in FOV.
       const candidate = {
-        x: at.x + (towardHead.x / len) * 0.15,
-        y: at.y - 0.35,
-        z: at.z + (towardHead.z / len) * 0.15,
+        x: at.x * 0.85 + input.head.position.x * 0.15,
+        y: Math.min(at.y - 0.2, input.head.position.y - 0.85),
+        z: at.z * 0.85 + input.head.position.z * 0.15,
       };
       const surface = nearestHorizontal(this.surfaces.surfaces, candidate);
       if (surface) {
         const onFloor = projectOntoSurface(candidate, surface);
+        // If plane Y is absurdly far from the photo, ignore it (wrong plane).
+        if (Math.abs(onFloor.y - candidate.y) < 1.2) {
+          return new Vector3(onFloor.x, onFloor.y, onFloor.z);
+        }
+      }
+      return new Vector3(candidate.x, Math.max(input.head.position.y - 1.35, candidate.y), candidate.z);
+    }
+    const chest = {
+      x: input.head.position.x + forward.x * 0.85,
+      y: input.head.position.y - 0.95,
+      z: input.head.position.z + forward.z * 0.85,
+    };
+    const surface = nearestHorizontal(this.surfaces.surfaces, chest);
+    if (surface) {
+      const onFloor = projectOntoSurface(chest, surface);
+      if (Math.abs(onFloor.y - chest.y) < 1.2) {
         return new Vector3(onFloor.x, onFloor.y, onFloor.z);
       }
-      return new Vector3(candidate.x, Math.max(0.05, candidate.y), candidate.z);
     }
-    const placed = spawnInFront(
-      {
-        x: input.head.position.x,
-        y: input.head.position.y,
-        z: input.head.position.z,
-      },
-      forwardFrom(input.head.quaternion),
-      this.surfaces.surfaces,
-      config.spawnDistance,
-      config.chestOffset,
-    );
-    return new Vector3(placed.point.x, placed.point.y, placed.point.z);
+    return new Vector3(chest.x, chest.y, chest.z);
   }
 
   private async beginSceneCapture(origin: Vector3): Promise<void> {
@@ -938,13 +938,20 @@ export class SceneEchoesApp {
       item.root.scale.setScalar(factor);
     }
     item.root.position.copy(origin);
+    item.root.visible = true;
     item.falling = false;
     const limited = applyObjectLimit(this.placedObjects, item, config.maxObjects);
     if (limited.removed) this.placed.remove(limited.removed.root);
     this.placedObjects = limited.objects;
+    this.placed.visible = true;
     this.placed.add(item.root);
     this.carrying = null;
     this.grab = null;
+    console.info('[scene-echoes] placed', object.id, {
+      x: origin.x,
+      y: origin.y,
+      z: origin.z,
+    });
   }
 
   private updateGrab(dt: number, input: FrameInput): void {

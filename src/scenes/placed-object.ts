@@ -41,85 +41,64 @@ export interface PlacedObject {
   bounces: number;
 }
 
-function attachLocalJelly(model: Group): LocalJelly {
+function attachLocalJelly(_model: Group): LocalJelly {
+  // Do NOT inject onBeforeCompile jelly (inverse(modelMatrix)) — it breaks under
+  // WebXR multiview on Quest: meshes vanish in immersive AR and only reappear when
+  // the session blurs (browser "Resume" view). Keep spring state for squash only.
   const contactVecs = [0, 1, 2, 3, 4, 5].map(() => new Vector4());
-  const uContacts = { value: contactVecs };
-  const uRadius = { value: config.jellyRadius };
-  const uDepth = { value: 0 };
-  model.traverse((child) => {
-    const mesh = child as Mesh;
-    if (!mesh.isMesh || !mesh.material) return;
-    const source = mesh.material;
-    const next = Array.isArray(source) ? source.map((mat) => patchJellyMaterial(mat, uContacts, uRadius, uDepth)) : patchJellyMaterial(source, uContacts, uRadius, uDepth);
-    mesh.material = next as Mesh['material'];
-  });
-  return { contactVecs, uRadius, uDepth };
+  return {
+    contactVecs,
+    uRadius: { value: config.jellyRadius },
+    uDepth: { value: 0 },
+  };
 }
 
-function patchJellyMaterial(
-  material: Material,
-  uContacts: { value: Vector4[] },
-  uRadius: { value: number },
-  uDepth: { value: number },
-): Material {
-  const next = material.clone();
-  next.customProgramCacheKey = () => 'scene-echoes-local-jelly-v1';
-  next.onBeforeCompile = (shader) => {
-    shader.uniforms.uContacts = uContacts;
-    shader.uniforms.uRadius = uRadius;
-    shader.uniforms.uDepth = uDepth;
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-uniform vec4 uContacts[6];
-uniform float uRadius;
-uniform float uDepth;`,
-      )
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-{
-  vec3 world = (modelMatrix * vec4(transformed, 1.0)).xyz;
-  for (int i = 0; i < 6; i++) {
-    float strength = uContacts[i].w;
-    if (strength > 0.001) {
-      vec3 delta = world - uContacts[i].xyz;
-      float d = length(delta);
-      float t = clamp(1.0 - d / max(uRadius, 0.0001), 0.0, 1.0);
-      float fall = t * t * (3.0 - 2.0 * t);
-      world.y -= uDepth * strength * fall;
-      vec2 side = delta.xz;
-      float slen = length(side);
-      if (slen > 0.0001) {
-        world.xz += (side / slen) * uDepth * 0.22 * strength * fall;
-      }
+/** Make GLB meshes reliably drawable in immersive AR passthrough. */
+export function prepareModelForAr(model: Group): void {
+  model.visible = true;
+  model.traverse((child) => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.visible = true;
+    // XR camera frustum culling is often wrong for freshly placed content.
+    mesh.frustumCulled = false;
+    const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    for (const mat of mats) {
+      if (!mat) continue;
+      mat.transparent = false;
+      mat.depthTest = true;
+      mat.depthWrite = true;
+      mat.needsUpdate = true;
+      const std = mat as Material & {
+        emissive?: { setRGB: (r: number, g: number, b: number) => void };
+        metalness?: number;
+        roughness?: number;
+        envMapIntensity?: number;
+      };
+      // Slight lift so PBR sofas read against bright passthrough.
+      std.emissive?.setRGB(0.08, 0.08, 0.08);
+      if (typeof std.metalness === 'number') std.metalness = Math.min(std.metalness, 0.35);
+      if (typeof std.roughness === 'number') std.roughness = Math.max(std.roughness, 0.45);
+      if (typeof std.envMapIntensity === 'number') std.envMapIntensity = Math.max(std.envMapIntensity, 1);
     }
-  }
-  transformed = (inverse(modelMatrix) * vec4(world, 1.0)).xyz;
-}`,
-      );
-  };
-  next.needsUpdate = true;
-  return next;
+  });
 }
 
 function applyLocalJelly(item: PlacedObject): void {
-  const vecs = item.jelly.contactVecs;
-  for (let i = 0; i < 6; i++) {
-    const contact = item.contacts[i];
-    if (contact) vecs[i].set(contact.x, contact.y, contact.z, contact.strength);
-    else vecs[i].set(0, 0, 0, 0);
-  }
+  // Uniforms retained for API compatibility; vertex jelly shader is disabled on Quest.
   const amount = Math.max(0, Math.min(1, (1 - item.squash.displacement) / 0.32));
   item.jelly.uDepth.value = amount * Math.max(config.jellyDepth, item.object.realSize * 0.055);
   item.jelly.uRadius.value = Math.max(config.jellyRadius, item.object.realSize * 0.16);
 }
 
 export function makePlacedObject(object: ManifestObject, model: Group): PlacedObject {
+  prepareModelForAr(model);
   const shadow = createContactShadow(object.realSize * 0.35);
   const jelly = attachLocalJelly(model);
   const root = new Group();
+  root.name = `placed-${object.id}`;
+  root.visible = true;
+  root.frustumCulled = false;
   root.add(model, shadow);
   return {
     id: object.id,
