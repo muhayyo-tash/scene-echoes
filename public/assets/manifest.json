@@ -14,6 +14,17 @@
       "hotspot": { "type": "circle", "x": 0.5, "y": 0.4, "r": 0.32 }
     },
     {
+      "id": "eagle",
+      "scene": "object3d",
+      "model": "assets/models/eagle.glb",
+      "kind": "object",
+      "label": "eagle",
+      "realSize": 0.4,
+      "up": "y",
+      "baseOffset": 0,
+      "hotspot": { "type": "circle", "x": 0.5, "y": 0.5, "r": 0.4 }
+    },
+    {
       "id": "duck",
       "scene": "book",
       "model": "assets/models/duck.glb",

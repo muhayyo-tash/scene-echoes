@@ -68,7 +68,12 @@ import { createGhostHand, playGhostPinchHold, playGhostSlide } from '../core/gho
 import { SceneCapture } from '../core/scene-capture.js';
 import { FileExplorer } from '../library/explorer.js';
 import type { FinderSection } from '../assets/drawn.js';
-import { createModelSource, createFilmProcessing, type LiveFilmResult } from '../conversion/source.js';
+import {
+  createModelSource,
+  createFilmProcessing,
+  isManifestDefault,
+  type LiveFilmResult,
+} from '../conversion/source.js';
 import { ConversionAnimation } from '../conversion/animation.js';
 import type { ConversionPoint, FilmProcessing, ModelSource } from '../conversion/types.js';
 import {
@@ -708,10 +713,17 @@ export class SceneEchoesApp {
       this.convertingSince += dt;
       this.clearHandFeedback();
       this.conversion.update(0);
-      if (this.space.photoOpen && Math.floor(this.convertingSince) !== Math.floor(this.convertingSince - dt)) {
-        this.explorer.setPhotoGuide(`Loading 3D model… ${Math.floor(this.convertingSince)}s`);
+      if (Math.floor(this.convertingSince) !== Math.floor(this.convertingSince - dt)) {
+        const secs = Math.floor(this.convertingSince);
+        if (this.space.photoOpen) {
+          this.explorer.setPhotoGuide(`Loading 3D model… ${secs}s`);
+        } else {
+          this.conversion.setMessage(`Loading… ${secs}s`);
+        }
       }
-      if (!this.pendingConverted && this.convertingSince > 20) {
+      // Live Gemini→HF can take minutes; bundled eagle/sofa should finish in seconds.
+      const timeoutSeconds = isManifestDefault() ? 20 : config.conversionTimeoutSeconds;
+      if (!this.pendingConverted && this.convertingSince > timeoutSeconds) {
         console.warn('[scene-echoes] conversion timed out');
         this.conversionGen += 1;
         this.conversion.finish();
@@ -841,25 +853,45 @@ export class SceneEchoesApp {
     this.conversion.group.visible = false;
   }
 
+  /**
+   * Pinch in empty room space:
+   * - local + API keys → Gemini → Hugging Face (live still)
+   * - GitHub Pages / no keys → bundled eagle.glb demo stand-in
+   */
   private async beginSceneCapture(origin: Vector3): Promise<void> {
     if (this.converting || this.sceneCaptureBusy) return;
     this.sceneCaptureBusy = true;
     this.converting = true;
     this.space.space = 'converting';
-    this.conversion.start(origin, true);
+    this.conversion.start(origin, true, 'Loading…');
     this.audio.play('whoosh', origin);
     try {
-      const still = await this.sceneCapture.captureStill();
-      if (!still.ok) {
-        throw new Error(`${still.reason}: ${still.detail}`);
+      if (!isManifestDefault()) {
+        try {
+          const still = await this.sceneCapture.captureStill();
+          if (!still.ok) {
+            throw new Error(`${still.reason}: ${still.detail}`);
+          }
+          console.info('[scene-echoes] scene still', still.label);
+          this.conversion.setMessage('Loading 3D model…');
+          await this.beginConversion(`scene-${Date.now()}`, origin, true, {
+            x: 0.5,
+            y: 0.5,
+            image: still.dataUrl,
+            allowFallback: false,
+          });
+          return;
+        } catch (error) {
+          console.warn(
+            '[scene-echoes] live scene conversion failed, falling back to eagle.glb',
+            error,
+          );
+          this.conversion.start(origin, true, 'Loading…');
+        }
       }
-      console.info('[scene-echoes] scene still', still.label);
-      await this.beginConversion(`scene-${Date.now()}`, origin, true, {
-        x: 0.5,
-        y: 0.5,
-        image: still.dataUrl,
-        allowFallback: false,
-      });
+      // Competition / offline demo: pre-baked eagle for empty-space pinch.
+      this.conversion.setMessage('Loading…');
+      await this.beginConversion('eagle', origin, true);
     } catch (error) {
       console.warn('[scene-echoes] scene capture failed', error);
       this.conversion.finish();
@@ -885,12 +917,18 @@ export class SceneEchoesApp {
     this.space.space = 'converting';
     this.clearHandFeedback();
     if (!already) {
-      this.conversion.start(origin, column);
+      this.conversion.start(
+        origin,
+        column,
+        this.space.photoOpen ? 'Loading 3D model…' : 'Loading…',
+      );
       this.audio.play('whoosh', origin);
     }
     try {
       if (this.space.photoOpen) {
         this.explorer.setPhotoGuide('Loading 3D model…');
+      } else {
+        this.conversion.setMessage('Loading…');
       }
       await ensureMeshoptDecoder();
       const handle = await this.modelSource.request(id, point);

@@ -25,16 +25,24 @@ async function download(url, dest) {
   console.log('downloaded', dest, buf.length, 'bytes');
 }
 
-const licenses = ['# Model licenses', ''];
 for (const model of MODELS) {
   const dest = join(dir, model.dest);
-  licenses.push(`- \`${model.dest}\`: ${model.license}`);
-  licenses.push(`  ${model.url}`);
   if (existsSync(dest)) {
     console.log('exists', model.dest);
     continue;
   }
   await download(model.url, dest);
 }
-writeFileSync(join(dir, 'LICENSES.md'), `${licenses.join('\n')}\n`);
+writeFileSync(
+  join(dir, 'LICENSES.md'),
+  [
+    '# Model licenses',
+    '',
+    '- `duck.glb`: Khronos glTF Sample Assets — Duck',
+    '  https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb',
+    '- `sofa.glb`: competition demo asset for the Meta Echoes photo → 3D path (keep for submission)',
+    '- `eagle.glb`: local / scene-pinch demo stand-in (safe to remove before submission; not listed in Meta Echoes)',
+    '',
+  ].join('\n'),
+);
 console.log('models ready');
