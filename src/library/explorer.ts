@@ -29,6 +29,16 @@ import type { FilmProgress } from '../conversion/types.js';
 export const FINDER_WIDTH = 0.52;
 export const FINDER_HEIGHT = 0.34;
 const DOCK_SIZE = 0.1;
+/** Must match `drawFinderWindow` canvas size. */
+const CHROME_W = 1024;
+const CHROME_H = 640;
+
+function chromeToLocal(cx: number, cy: number): { x: number; y: number } {
+  return {
+    x: -FINDER_WIDTH / 2 + (cx / CHROME_W) * FINDER_WIDTH,
+    y: FINDER_HEIGHT / 2 - (cy / CHROME_H) * FINDER_HEIGHT,
+  };
+}
 
 export interface ExplorerCard {
   id: string;
@@ -103,7 +113,7 @@ export class FileExplorer {
       glow.raycast = () => undefined;
       const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
       const label = new Mesh(
-        new PlaneGeometry(0.16, 0.032),
+        new PlaneGeometry(0.22, 0.048),
         new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
       );
       label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
@@ -179,8 +189,8 @@ export class FileExplorer {
     }
     this.moveHit.updateWorldMatrix(true, true);
     this.moveHit.worldToLocal(this.world.set(point.x, point.y, point.z));
-    const hw = (FINDER_WIDTH * 0.92) * 0.5 + 0.01;
-    const hh = (FINDER_HEIGHT * 0.18) * 0.5 + 0.01;
+    const hw = (FINDER_WIDTH * 0.62) * 0.5 + 0.01;
+    const hh = (FINDER_HEIGHT * 0.1) * 0.5 + 0.01;
     return Math.abs(this.world.x) <= hw && Math.abs(this.world.y) <= hh && Math.abs(this.world.z) <= 0.04;
   }
 
@@ -431,20 +441,29 @@ export class FileExplorer {
     );
     this.closeHit.position.set(-FINDER_WIDTH * 0.44, FINDER_HEIGHT * 0.42, 0.01);
     this.closeHit.userData.close = true;
+    // Title-bar drag only — keep clear of the left sidebar so Movies is tappable.
+    const titleH = Math.floor(CHROME_H * 0.1);
+    const titleCenter = chromeToLocal(CHROME_W * 0.55, 8 + titleH * 0.55);
     this.moveHit = new Mesh(
-      new PlaneGeometry(FINDER_WIDTH * 0.92, FINDER_HEIGHT * 0.18),
+      new PlaneGeometry(FINDER_WIDTH * 0.62, FINDER_HEIGHT * 0.1),
       new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
     );
-    this.moveHit.position.set(0, FINDER_HEIGHT * 0.4, 0.016);
+    this.moveHit.position.set(titleCenter.x, titleCenter.y, 0.014);
     this.moveHit.userData.finderMove = true;
     const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
-    const sideX = -FINDER_WIDTH * 0.39;
+    const sideW = Math.floor(CHROME_W * 0.22);
+    const sideTop = 8 + titleH + 10;
+    const rowH = 44;
+    const rowGap = 10;
     folders.forEach((id, index) => {
+      const cy = sideTop + 18 + index * (rowH + rowGap) + rowH * 0.5;
+      const center = chromeToLocal(8 + sideW * 0.5, cy);
       const hit = new Mesh(
-        new PlaneGeometry(FINDER_WIDTH * 0.18, 0.048),
+        new PlaneGeometry((sideW / CHROME_W) * FINDER_WIDTH * 0.95, (rowH / CHROME_H) * FINDER_HEIGHT * 1.15),
         new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
       );
-      hit.position.set(sideX, 0.174 - index * 0.034, 0.012);
+      // In front of the drag strip so sidebar selects win the ray.
+      hit.position.set(center.x, center.y, 0.02);
       hit.userData.folder = id;
       this.sidebarHits.push(hit);
       this.group.add(hit);
@@ -455,7 +474,7 @@ export class FileExplorer {
   private chromeTexture(): CanvasTexture {
     const count = this.visibleCount();
     return new CanvasTexture(
-      canvasTextureSource((ctx, w, h) => drawFinderWindow(ctx, w, h, this.folder, count), 1024, 640),
+      canvasTextureSource((ctx, w, h) => drawFinderWindow(ctx, w, h, this.folder, count), CHROME_W, CHROME_H),
     );
   }
 
