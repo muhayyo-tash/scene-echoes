@@ -2,7 +2,9 @@
 
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Point at the **Meta Echoes** dock icon and pinch (Meta select) to open it — there is no palm-swipe open. A photo is the hold-to-convert flow for a prepared 3D object. A deliberate pinch-and-hold in empty space runs the scene / live-conversion flow. An MP4 in Meta Echoes is the movie flow.
+The headset starts as a clean view of your room. Point at the **Meta Echoes** dock icon and pinch (Meta select) to open it. A photo uses pinch-and-hold to pop a prepared 3D object. Empty-space scene load uses a **fist / palm grab** (Meta’s “power grab”), not pinch — pinch alone will not spawn models. An MP4 in Meta Echoes is the movie flow.
+
+Hand gestures follow [Meta’s hands interaction types](https://developers.meta.com/horizon/design/hands-interaction-types/): pinch for UI/select, poke for direct touch, palm grab for heavier actions.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
 
@@ -83,7 +85,7 @@ npm run dev
 Open the printed HTTPS URL in the **Meta Quest Browser**. Tap **Enter**.
 
 - Meta Echoes → sofa photo → pinch → `sofa.glb`
-- Pinch in empty room space → shows **Loading…** → `eagle.glb`
+- Make a **fist** in empty room space and hold ~0.7s → **Loading…** → `eagle.glb` (pinch will not do this)
 
 ### Live Gemini → Hugging Face flow
 

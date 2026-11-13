@@ -34,6 +34,7 @@ import {
   handSpeed,
   type HandRuntime,
 } from '../core/hands.js';
+import { isPalmGrab } from '../core/palm-grab.js';
 import {
   createSurfaceFinder,
   fingertipNearSurface,
@@ -164,12 +165,13 @@ export class SceneEchoesApp {
   /** Seconds the platform select has been held while the hand ray stays on the print. */
   private photoSelectHold = 0;
   /**
-   * Empty-space scene pinch: Meta select hold progress (not tip-distance).
-   * Resets if the hand moves too far or select releases.
+   * Empty-space scene load: Meta palm/power grab (fist) hold — not pinch.
+   * Must fully open the hand between loads (`sceneFistArmed`).
    */
-  private sceneSelectHold = 0;
-  private sceneSelectOrigin: Vector3 | null = null;
-  private sceneSelectCooldown = 0;
+  private sceneFistHold = 0;
+  private sceneFistOrigin: Vector3 | null = null;
+  private sceneFistCooldown = 0;
+  private sceneFistArmed = true;
   /** Bumped on timeout/cancel so a late GLB resolve cannot place after failure. */
   private conversionGen = 0;
   private desktopHold: {
@@ -344,8 +346,8 @@ export class SceneEchoesApp {
     this.hands.slide = slideL ?? slideR;
     this.hands.anyPinch = this.hands.left.pinched || this.hands.right.pinched;
     if (this.photoPinchCooldown > 0) this.photoPinchCooldown = Math.max(0, this.photoPinchCooldown - dt);
-    if (this.sceneSelectCooldown > 0) {
-      this.sceneSelectCooldown = Math.max(0, this.sceneSelectCooldown - dt);
+    if (this.sceneFistCooldown > 0) {
+      this.sceneFistCooldown = Math.max(0, this.sceneFistCooldown - dt);
     }
     const lowest = [input.left?.wrist?.y, input.right?.wrist?.y].filter((n): n is number => n !== undefined);
     maybeDefaultFloor(
@@ -790,63 +792,99 @@ export class SceneEchoesApp {
   }
 
   /**
-   * Empty-space load: Meta select held ~0.45s with a stable hand, ray not on UI.
-   * Tip-distance / short long-press never commits (that was firing eagle by accident).
+   * Empty-space load via Meta palm/power grab (fist), not pinch.
+   * Meta keeps pinch for UI select; palm grab is the “heavier” gesture
+   * (https://developers.meta.com/horizon/design/hands-interaction-types/).
    */
   private updateSceneHold(dt: number, input: FrameInput): void {
+    const anyFist =
+      this.handIsFist(this.hands.left) || this.handIsFist(this.hands.right);
+    if (!anyFist) {
+      this.sceneFistArmed = true;
+      this.sceneFistHold = 0;
+      this.sceneFistOrigin = null;
+      // Cancel the “Hold fist…” preview if we never committed a load.
+      if (!this.converting && !this.pendingConverted) {
+        this.conversion.finish();
+      }
+    }
+
     if (
       this.space.explorerOpen ||
       this.space.movieOpen ||
       this.space.photoOpen ||
       this.converting ||
-      this.sceneSelectCooldown > 0
+      this.pendingConverted ||
+      this.sceneFistCooldown > 0 ||
+      !this.sceneFistArmed
     ) {
-      this.sceneSelectHold = 0;
-      this.sceneSelectOrigin = null;
+      if (!anyFist) {
+        /* armed above */
+      } else {
+        this.sceneFistHold = 0;
+        this.sceneFistOrigin = null;
+      }
       return;
     }
 
     let holding: HandRuntime | null = null;
     for (const hand of [this.hands.left, this.hands.right]) {
-      // Firm Meta pinch only (select + analog strength) — tip-distance ignored.
-      if (!hand.selectPressed || hand.selectValue < 0.75) continue;
-      // Aiming at the dock / any UI must never start a scene load.
+      if (!this.handIsFist(hand)) continue;
+      // Aiming at UI must never start a scene load.
       const ui = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (ui) continue;
-      const tip = hand.pinchPosition ?? hand.indexTip;
-      if (tip && this.explorer.hitIcon(tip, 0.16)) continue;
       holding = hand;
       break;
     }
 
     if (!holding) {
-      this.sceneSelectHold = 0;
-      this.sceneSelectOrigin = null;
+      this.sceneFistHold = 0;
+      this.sceneFistOrigin = null;
       return;
     }
 
-    const tip = holding.pinchPosition ?? holding.indexTip;
+    const tip = holding.palm ?? holding.pinchPosition ?? holding.indexTip;
     const pos = tip
       ? new Vector3(tip.x, tip.y, tip.z)
       : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
 
-    if (!this.sceneSelectOrigin) {
-      this.sceneSelectOrigin = pos.clone();
-      this.sceneSelectHold = 0;
-    } else if (pos.distanceTo(this.sceneSelectOrigin) > config.sceneSelectMoveTolerance) {
-      this.sceneSelectOrigin.copy(pos);
-      this.sceneSelectHold = 0;
+    if (!this.sceneFistOrigin) {
+      this.sceneFistOrigin = pos.clone();
+      this.sceneFistHold = 0;
+    } else if (pos.distanceTo(this.sceneFistOrigin) > config.sceneFistMoveTolerance) {
+      this.sceneFistOrigin.copy(pos);
+      this.sceneFistHold = 0;
       return;
     }
 
-    this.sceneSelectHold += dt;
-    if (this.sceneSelectHold < config.sceneSelectHoldSeconds) return;
+    this.sceneFistHold += dt;
+    if (this.sceneFistHold < 0.25) {
+      this.conversion.start(pos, true, 'Hold fist…');
+    } else if (this.sceneFistHold < config.sceneFistHoldSeconds) {
+      this.conversion.setMessage('Keep fist closed…');
+    }
+    if (this.sceneFistHold < config.sceneFistHoldSeconds) return;
 
-    this.sceneSelectHold = 0;
-    this.sceneSelectOrigin = null;
-    this.sceneSelectCooldown = config.sceneSelectCooldownSeconds;
+    this.sceneFistHold = 0;
+    this.sceneFistOrigin = null;
+    this.sceneFistArmed = false;
+    this.sceneFistCooldown = config.sceneFistCooldownSeconds;
     holding.longPress.fired = false;
     void this.beginSceneCapture(pos);
+  }
+
+  private handIsFist(hand: HandRuntime): boolean {
+    if (!hand.tracked) return false;
+    const joints = hand.joints;
+    return isPalmGrab({
+      palm: hand.palm,
+      tips: [
+        joints['index-finger-tip'] ?? hand.indexTip,
+        joints['middle-finger-tip'] ?? null,
+        joints['ring-finger-tip'] ?? null,
+        joints['pinky-finger-tip'] ?? null,
+      ],
+    });
   }
 
   /** Spawn in clear view ahead of the headset (photo is dismissed before this). */
@@ -1283,16 +1321,8 @@ export class SceneEchoesApp {
   }
 
   private updateBookHold(input: FrameInput): void {
-    if (this.space.explorerOpen || this.space.movieOpen || this.space.photoOpen || this.converting) return;
-    const floorY = floorHeight(this.surfaces.surfaces);
-    for (const hand of [this.hands.left, this.hands.right]) {
-      if (!hand.surfaceHold.fired || !hand.indexTip) continue;
-      const near = fingertipNearSurface(hand.indexTip, this.surfaces.surfaces);
-      if (!near || !isElevatedSurface(near.surface, floorY, config.bookTableAboveFloor)) continue;
-      hand.surfaceHold.fired = false;
-      void this.beginSceneCapture(new Vector3(hand.indexTip.x, hand.indexTip.y, hand.indexTip.z));
-      return;
-    }
+    // Surface fingertip-hold used to spawn scene models; that was too easy to
+    // trip. Empty-space load is fist-only now (Meta palm grab).
     void input;
   }
 

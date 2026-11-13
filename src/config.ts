@@ -9,14 +9,14 @@ const numericDefaults = {
   longPressSeconds: 0.3,
   longPressMoveTolerance: 0.18,
   /**
-   * Empty-space scene pinch: Meta select (gamepad button 0) must stay down this
-   * long. Tip-distance alone never commits — matches Quest’s deliberate pinch.
+   * Empty-space scene load uses Meta palm/power grab (fist), not pinch.
+   * Hold a closed fist this long — pinch alone never commits.
    */
-  sceneSelectHoldSeconds: 0.45,
-  /** Ignore scene pinches that wander more than this while holding select. */
-  sceneSelectMoveTolerance: 0.08,
-  /** Cooldown after a scene/demo load so a second flicker cannot re-fire. */
-  sceneSelectCooldownSeconds: 1.5,
+  sceneFistHoldSeconds: 0.7,
+  /** Ignore fists that wander more than this while holding. */
+  sceneFistMoveTolerance: 0.1,
+  /** Cooldown after a scene/demo load so one fist cannot spawn many eagles. */
+  sceneFistCooldownSeconds: 3,
   pokeDepth: 0.015,
   pokeCooldownMs: 300,
   palmTouchDistance: 0.03,
