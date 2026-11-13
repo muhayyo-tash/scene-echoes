@@ -21,8 +21,6 @@ git push -u origin main
 
 `https://YOUR_USER.github.io/scene-echoes/`
 
-The animation lab is `https://YOUR_USER.github.io/scene-echoes/lab.html`.
-
 8. Open that URL in the Meta Quest Browser and tap Enter.
 
 ## After you add real photos, models or a film
@@ -30,14 +28,11 @@ The animation lab is `https://YOUR_USER.github.io/scene-echoes/lab.html`.
 Drop files into `public/assets/` as described in the README, then:
 
 ```bash
-npm run validate-timeline
 git add public/assets
-git commit -m "Add real sofa, book and film assets."
+git commit -m "Add real sofa and film assets."
 git push
 ```
 
 Wait for Actions to finish, then refresh the headset browser.
 
-## Testing the live conversion client later
-
-Run `npm run mock-conversion-server`, set `CONVERSION_API_URL` in `src/config.ts` to `http://YOUR_PC_LAN_IP:8787` (Quest cannot use localhost of your laptop unless you tunnel), rebuild, and open the app with `?live=1`. If the mock is unreachable, the app falls back to the bundled GLB. The demo judges should keep manifest mode.
+Live Gemini → Hugging Face conversion is documented in the README (`npm run dev` with `.env` keys). GitHub Pages stays on bundled models.
