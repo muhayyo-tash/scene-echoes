@@ -2,11 +2,21 @@
 
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Point at the **Meta Echoes** dock icon and pinch (Meta select) to open it. A photo uses pinch-and-hold to pop a prepared 3D object. Empty-space scene load uses a **fist / palm grab** (Meta’s “power grab”), not pinch — pinch alone will not spawn models. An MP4 in Meta Echoes is the movie flow.
-
-Hand gestures follow [Meta’s hands interaction types](https://developers.meta.com/horizon/design/hands-interaction-types/): pinch for UI/select, poke for direct touch, palm grab for heavier actions.
+The headset starts as a clean view of your room. Open **Meta Echoes** from the dock, open a photo, or load from empty space using the hand gestures below. An MP4 in Meta Echoes is the movie flow.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
+
+## Hand gestures
+
+Aligned with [Meta’s hands interaction types](https://developers.meta.com/horizon/design/hands-interaction-types/) (pinch for UI/select, palm grab for heavier actions):
+
+| Gesture | What it does |
+| --- | --- |
+| **Fist** | Empty-space scene load (eagle / live capture) |
+| **Pinch** | Meta Echoes UI + open photo + 2D→3D pop |
+
+- **Fist** — close the hand and hold ~0.7s in empty space (not while aiming at UI). Pinch alone will not spawn scene models.
+- **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch-and-hold on the open 2D print to pop its 3D model.
 
 ## Who it is for
 
@@ -25,7 +35,7 @@ public/assets/
   masks/                 # optional cutout masks
   models/                # pre-baked GLBs
     sofa.glb             # keep for submission — Meta Echoes sofa pop
-    eagle.glb            # scene-pinch demo stand-in (safe to remove before submit)
+    eagle.glb            # empty-space fist demo stand-in (safe to remove before submit)
     duck.glb             # book / legacy sample
   movie/                 # optional MP4 films + timeline
 ```
@@ -37,7 +47,7 @@ public/assets/
 | `public/assets/manifest.json` | Registers every object the runtime can load |
 | `public/assets/explorer.json` | Subset listed in the Meta Echoes UI |
 
-**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. `eagle.glb` is only for empty-space pinch when live APIs are unavailable; remove it (and its `manifest.json` entry) before submit if you want a leaner package.
+**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. `eagle.glb` is only for empty-space fist when live APIs are unavailable; remove it (and its `manifest.json` entry) before submit if you want a leaner package.
 
 ## Adding a photo to Meta Echoes
 
@@ -84,8 +94,8 @@ npm run dev
 
 Open the printed HTTPS URL in the **Meta Quest Browser**. Tap **Enter**.
 
-- Meta Echoes → sofa photo → pinch → `sofa.glb`
-- Make a **fist** in empty room space and hold ~0.7s → **Loading…** → `eagle.glb` (pinch will not do this)
+- Pinch Meta Echoes → sofa photo → pinch-hold → `sofa.glb`
+- **Fist** in empty room space (~0.7s) → **Loading…** → `eagle.glb`
 
 ### Live Gemini → Hugging Face flow
 
