@@ -26,11 +26,9 @@ function rect(set, x, y, w, h, r, g, b, a = 255) {
 }
 
 const photos = join(root, 'public/assets/photos');
-const masks = join(root, 'public/assets/masks');
 const models = join(root, 'public/assets/models');
 const movie = join(root, 'public/assets/movie');
 mkdirSync(photos, { recursive: true });
-mkdirSync(masks, { recursive: true });
 mkdirSync(models, { recursive: true });
 mkdirSync(movie, { recursive: true });
 
@@ -42,12 +40,6 @@ const sofa = fill(640, 480, (set, w, h) => {
 });
 const sofaPng = join(photos, 'sofa.png');
 writePng(sofaPng, 640, 480, sofa);
-
-const mask = fill(640, 480, (set, w, h) => {
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) set(x, y, 0, 0, 0, 0);
-  rect(set, Math.floor(w * 0.18), Math.floor(h * 0.42), Math.floor(w * 0.64), Math.floor(h * 0.38), 255, 255, 255, 255);
-});
-writePng(join(masks, 'sofa.png'), 640, 480, mask);
 
 const poster = fill(640, 360, (set, w, h) => {
   for (let y = 0; y < h; y++) {

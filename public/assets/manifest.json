@@ -4,7 +4,6 @@
       "id": "sofa",
       "scene": "object3d",
       "photo": "assets/photos/sofa.jpg",
-      "mask": "assets/masks/sofa.png",
       "model": "assets/models/sofa.glb",
       "kind": "object",
       "label": "sofa",
