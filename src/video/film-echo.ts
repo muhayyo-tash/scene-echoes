@@ -21,7 +21,7 @@ export class FilmEcho {
   private bound: Texture | null = null;
   /** Size relative to the opaque player. */
   private readonly echoScale = 3.35;
-  private readonly baseOpacity = 0.28;
+  private readonly baseOpacity = 0.42;
 
   constructor() {
     this.edgeMask = createSoftEdgeAlphaMap();
