@@ -72,6 +72,8 @@ export function parseObjectName(raw) {
     /^(the object is|the object marked is|it is|this is|that is|that's|the item is)\s+/i,
     '',
   );
+  // Models often echo the field name: "object swan" / "object: swan".
+  line = line.replace(/^object\s*:?\s*/i, '');
   line = line.replace(/^(a|an|the)\s+/i, '');
   line = line.replace(/[.!?]+$/g, '');
   const words = line
@@ -79,8 +81,96 @@ export function parseObjectName(raw) {
     .replace(/[^a-z0-9\s-]/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
+    .filter((word) => word !== 'object')
     .slice(0, 2);
   return words.join(' ');
+}
+
+/** Normalize Gemini weather token to rain | snow | none. */
+export function parseWeatherName(raw) {
+  let w = String(raw ?? '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  if (w === 'raining' || w === 'storm' || w === 'stormy') w = 'rain';
+  if (w === 'snowing' || w === 'snowfall') w = 'snow';
+  if (w === 'rain' || w === 'snow') return w;
+  return 'none';
+}
+
+const THEME_COLORS = {
+  warm: '#d2a679',
+  gold: '#c9a25c',
+  golden: '#c9a25c',
+  sunset: '#d4896a',
+  cool: '#7f9bb5',
+  cold: '#7f9bb5',
+  blue: '#6f8fad',
+  green: '#7d9a72',
+  forest: '#6d8a64',
+  grey: '#8b8e93',
+  gray: '#8b8e93',
+  overcast: '#8b8e93',
+  night: '#3f4758',
+  dark: '#3f4758',
+  soft: '#c8c2b4',
+  neutral: '#c8c2b4',
+  pink: '#c495a4',
+  purple: '#8f7aa8',
+  orange: '#d4925a',
+  teal: '#5f9e9a',
+};
+
+/** @returns {{ label: string, color: string } | null} */
+export function parseThemeName(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text || /^none$/i.test(text)) return null;
+  const hex = text.match(/#([0-9a-fA-F]{6})\b/);
+  const words = text
+    .toLowerCase()
+    .replace(/#[0-9a-fA-F]{6}/g, ' ')
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const label = words.slice(0, 2).join(' ') || (hex ? 'tint' : '');
+  if (hex) return { label: label || 'tint', color: `#${hex[1].toLowerCase()}` };
+  for (const word of words) {
+    if (THEME_COLORS[word]) return { label: words.slice(0, 2).join(' '), color: THEME_COLORS[word] };
+  }
+  return null;
+}
+
+/**
+ * Film frame reply: "object: deer | weather: rain | theme: warm gold #d2a679"
+ * Also accepts looser lines like "object swan" or "object: swan".
+ * @returns {{ object: string, weather: 'none' | 'rain' | 'snow', theme: { label: string, color: string } | null }}
+ */
+export function parseFilmFrame(raw) {
+  const text = String(raw ?? '').trim();
+  const objectMatch =
+    text.match(/object\s*:\s*([^|\n]+)/i) || text.match(/\bobject\s+([^|\n]+)/i);
+  const weatherMatch = text.match(/weather\s*:?\s*([^|\n]+)/i);
+  const themeMatch = text.match(/theme\s*:?\s*([^|\n]+)/i);
+  if (objectMatch || weatherMatch || themeMatch) {
+    let object = parseObjectName(objectMatch?.[1] ?? 'none');
+    // If the capture still includes weather/theme tails, keep the first token group only.
+    object = object.split(/\s+\b(?:weather|theme)\b/i)[0]?.trim() ?? object;
+    let weatherRaw = weatherMatch?.[1] ?? 'none';
+    let themeRaw = themeMatch?.[1] ?? 'none';
+    // Avoid treating "object swan" capture "swan" fine; if weather matched the word
+    // inside a non-structured line, only trust weather/theme when ":" or "|" present.
+    if (!/weather\s*:/i.test(text) && !/\|\s*weather/i.test(text)) weatherRaw = 'none';
+    if (!/theme\s*:/i.test(text) && !/\|\s*theme/i.test(text)) themeRaw = 'none';
+    return {
+      object,
+      weather: parseWeatherName(weatherRaw),
+      theme: parseThemeName(themeRaw),
+    };
+  }
+  const label = parseObjectName(text);
+  const first = label.split(/\s+/)[0] ?? '';
+  if (first === 'rain' || first === 'storm') return { object: 'none', weather: 'rain', theme: null };
+  if (first === 'snow') return { object: 'none', weather: 'snow', theme: null };
+  return { object: label, weather: 'none', theme: null };
 }
 
 export function createJob() {
@@ -319,10 +409,9 @@ export function modelBytes(name) {
 
 const FILM_SAMPLE_SECONDS = 6;
 const FILM_MAX_RECONSTRUCTS = 4;
-const FILM_NAME_PROMPT =
-  'This is one frame from a short film. Name the one main whole object that should become a 3D prop in the room, in one or two common English words. If the frame is only landscape, sky, or nothing distinct, reply none. If it is weather, reply rain. Do not name people, logos, or parts.';
+export const FILM_FRAME_PROMPT =
+  'This is one frame from a short film. Reply with ONLY this exact pattern on one line (include the words object, weather, theme and the pipes): object: <name or none> | weather: <none|rain|snow> | theme: <short mood #RRGGBB or none>. Example: object: swan | weather: none | theme: cool blue #7f9bb5. For object, use one or two common English nouns for the main whole prop, or none if only landscape/sky/snow. Never write the word object as the noun itself. For weather, rain or snow only if precipitation is falling; snow on the ground alone is none. For theme, always give a mood word plus a hex color from the frame. Do not name people, logos, or parts.';
 const SKIP_LABELS = new Set(['none', 'nothing', 'no', 'n/a', 'na', 'empty', 'landscape', 'sky', 'ground', 'background']);
-const EFFECT_LABELS = new Set(['rain', 'snow', 'storm']);
 const LABEL_BEHAVIOR = {
   bird: 'fly',
   flamingo: 'fly',
@@ -337,6 +426,7 @@ const LABEL_BEHAVIOR = {
   leaf: 'drift',
   petal: 'drift',
   rain: 'rain',
+  snow: 'snow',
 };
 const SIDES = ['right', 'low-left', 'left', 'low-right'];
 
@@ -385,7 +475,7 @@ function behaviorFor(label) {
 function realSizeFor(behavior) {
   if (behavior === 'fly') return 0.28;
   if (behavior === 'walk') return 0.45;
-  if (behavior === 'rain') return 1;
+  if (behavior === 'rain' || behavior === 'snow') return 1;
   return 0.4;
 }
 
@@ -404,6 +494,7 @@ export async function runFilm(job, input) {
     const frameDir = join(root, 'tmp', 'film-frames', job.id);
     mkdirSync(frameDir, { recursive: true });
     const chosen = [];
+    const atmosphere = [];
     const reconstructed = new Map();
     let reconstructs = 0;
     for (let i = 0; i < times.length; i++) {
@@ -412,31 +503,46 @@ export async function runFilm(job, input) {
       extractFrame(film.path, time, dest);
       job.progress = 0.1 + (i / times.length) * 0.25;
       const image = { bytes: readFileSync(dest), mime: 'image/jpeg' };
-      let label = '';
+      let frame;
       try {
-        label = await geminiText(image, FILM_NAME_PROMPT);
+        frame = parseFilmFrame(await geminiText(image, FILM_FRAME_PROMPT));
       } catch (error) {
         warn(`[conversion] ${job.id} frame ${time}s name failed:`, error instanceof Error ? error.message : error);
         continue;
       }
-      if (!label || SKIP_LABELS.has(label)) {
-        log(`[conversion] ${job.id} ${time}s skip (${label || 'empty'})`);
-        continue;
+      log(
+        `[conversion] ${job.id} ${time}s → object=${frame.object || 'none'} weather=${frame.weather} theme=${frame.theme ? `${frame.theme.label} ${frame.theme.color}` : 'none'}`,
+      );
+      if (frame.theme) {
+        const lastTheme = atmosphere[atmosphere.length - 1];
+        if (!lastTheme || time - lastTheme.time >= FILM_SAMPLE_SECONDS) {
+          atmosphere.push({
+            id: `atmo-${time}`,
+            time,
+            color: frame.theme.color,
+            label: frame.theme.label,
+          });
+        }
       }
+      if (frame.weather !== 'none') {
+        const weatherId = `live-${frame.weather}`;
+        const lastWeather = [...chosen].reverse().find((item) => item.kind === 'effect');
+        if (!lastWeather || time - lastWeather.time >= FILM_SAMPLE_SECONDS) {
+          chosen.push({
+            id: `${weatherId}-${time}`,
+            time,
+            objectId: weatherId,
+            label: frame.weather,
+            kind: 'effect',
+            behavior: frame.weather,
+          });
+        }
+      }
+      const label = frame.object;
+      if (!label || SKIP_LABELS.has(label)) continue;
       const objectId = `live-${slug(label)}`;
-      const lastSame = [...chosen].reverse().find((item) => item.label === label);
+      const lastSame = [...chosen].reverse().find((item) => item.label === label && item.kind === 'object');
       if (lastSame && time - lastSame.time < FILM_SAMPLE_SECONDS) continue;
-      if (EFFECT_LABELS.has(label.split(' ')[0])) {
-        chosen.push({
-          id: `${objectId}-${time}`,
-          time,
-          objectId,
-          label,
-          kind: 'effect',
-          behavior: 'rain',
-        });
-        continue;
-      }
       if (!reconstructed.has(objectId) && reconstructs < FILM_MAX_RECONSTRUCTS) {
         const started = Date.now();
         log(`[conversion] ${job.id} ${time}s reconstructing "${label}"`);
@@ -454,7 +560,7 @@ export async function runFilm(job, input) {
           continue;
         }
       }
-      if (!reconstructed.has(objectId) && !EFFECT_LABELS.has(label.split(' ')[0])) continue;
+      if (!reconstructed.has(objectId)) continue;
       chosen.push({
         id: `${objectId}-${time}`,
         time,
@@ -496,11 +602,13 @@ export async function runFilm(job, input) {
     mkdirSync(filmDir, { recursive: true });
     job.timelinePath = join(filmDir, 'timeline.json');
     job.manifestPath = join(filmDir, 'manifest.json');
-    writeFileSync(job.timelinePath, JSON.stringify({ moments }, null, 2));
+    writeFileSync(job.timelinePath, JSON.stringify({ moments, atmosphere }, null, 2));
     writeFileSync(job.manifestPath, JSON.stringify({ objects }, null, 2));
     job.progress = 1;
     job.status = 'done';
-    log(`[conversion] ${job.id} film ready (${moments.length} moments, ${objects.length} objects)`);
+    log(
+      `[conversion] ${job.id} film ready (${moments.length} moments, ${objects.length} objects, ${atmosphere.length} atmosphere cues)`,
+    );
   } catch (error) {
     job.status = 'failed';
     job.error = error instanceof Error ? error.message : String(error);

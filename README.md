@@ -119,12 +119,16 @@ npm run prepare-film -- park.mp4
 
 Pass the full MP4 name (or path). Bare ids like `park` error.
 
-That extracts JPEG frames (at 1s, then every 5s), asks Gemini to name each, then sends the same frame + label to Hugging Face (SAM 3D Objects). Expect **~1.5 minutes per object** on HF (plus a short Gemini call). The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
+That extracts JPEG frames (at 1s, then every 5s) and asks Gemini for object, weather, and color mood on one line:
+
+`object: deer | weather: rain | theme: warm gold #d2a679`
+
+Objects go to Hugging Face for a GLB; rain/snow become room particles; theme becomes a **very transparent** room color wash. While a film plays, the same frames also soft-expand past the video bezel as translucent echo planes (room still visible through them); the center panel stays the original opaque MP4. Expect **~1.5 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
 
 Writes:
 
 - `public/assets/models/<object>.glb` — reconstructed props
-- `public/assets/movie/timeline.json` — when each object appears
+- `public/assets/movie/timeline.json` — object/weather moments + atmosphere color cues
 - movie entries in `public/assets/manifest.json`
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 

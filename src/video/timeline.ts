@@ -1,5 +1,6 @@
-import type { TimelineMoment } from '../assets/types.js';
+import type { AtmosphereCue, TimelineMoment } from '../assets/types.js';
 import { config } from '../config.js';
+import { parseAtmosphereColor } from './film-atmosphere.js';
 
 export type MomentStage = 'idle' | 'outline' | 'appear' | 'behave' | 'leave';
 
@@ -52,4 +53,23 @@ export function momentsToClearOnSeek(
 export function parseTimelineMoments(data: unknown): TimelineMoment[] {
   const moments = (data as { moments?: TimelineMoment[] })?.moments;
   return Array.isArray(moments) ? moments : [];
+}
+
+export function parseTimelineAtmosphere(data: unknown): AtmosphereCue[] {
+  const rows = (data as { atmosphere?: AtmosphereCue[] })?.atmosphere;
+  if (!Array.isArray(rows)) return [];
+  const cues: AtmosphereCue[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const time = Number((row as AtmosphereCue).time);
+    const color = parseAtmosphereColor(String((row as AtmosphereCue).color ?? ''));
+    if (!Number.isFinite(time) || !color) continue;
+    cues.push({
+      id: String((row as AtmosphereCue).id ?? `atmo-${time}`),
+      time,
+      color,
+      label: (row as AtmosphereCue).label ? String((row as AtmosphereCue).label) : undefined,
+    });
+  }
+  return cues.sort((a, b) => a.time - b.time);
 }

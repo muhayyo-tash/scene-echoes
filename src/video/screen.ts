@@ -9,10 +9,13 @@ import {
 } from 'three';
 import { config } from '../config.js';
 import { assetUrl } from '../assets/loaders.js';
+import { FilmEcho } from './film-echo.js';
 
 export class VideoScreen {
   readonly group = new Group();
   readonly mesh: Mesh;
+  readonly echo = new FilmEcho();
+  private glow: Mesh;
   video: HTMLVideoElement | null = null;
   private usingFallback = false;
   private clock = 0;
@@ -25,18 +28,21 @@ export class VideoScreen {
       new PlaneGeometry(config.videoScreenWidth, config.videoScreenWidth * (9 / 16)),
       new MeshBasicMaterial({ color: 0x111111 }),
     );
-    const glow = new Mesh(
+    this.glow = new Mesh(
       new PlaneGeometry(config.videoScreenWidth * 1.04, config.videoScreenWidth * (9 / 16) * 1.04),
       new MeshBasicMaterial({ color: new Color('#9fe8ff'), transparent: true, opacity: 0.12, depthWrite: false }),
     );
-    glow.position.z = -0.01;
-    this.group.add(glow, this.mesh);
+    this.glow.position.z = -0.01;
+    // Echo behind the opaque plate; room stays visible through it.
+    this.group.add(this.echo.group, this.glow, this.mesh);
     this.group.visible = false;
     this.group.name = 'video-screen';
+    this.echo.layout(config.videoScreenWidth, config.videoScreenWidth * (9 / 16));
   }
 
   async init(): Promise<void> {
     this.group.visible = false;
+    this.echo.setPlaying(false);
   }
 
   async preload(filmId: string): Promise<void> {
@@ -68,6 +74,7 @@ export class VideoScreen {
     const texture = new VideoTexture(video);
     texture.colorSpace = SRGBColorSpace;
     this.mesh.material = new MeshBasicMaterial({ map: texture });
+    this.echo.bindTexture(texture);
     this.video = video;
     this.usingFallback = false;
   }
@@ -77,6 +84,7 @@ export class VideoScreen {
     this.group.visible = true;
     this.group.scale.setScalar(1);
     this.scale = 1;
+    this.echo.setPlaying(true);
     // Slightly below eye height so it reads as a big panel, not a HUD overlay.
     const y = head.y - 0.05;
     this.group.position.set(
@@ -92,17 +100,16 @@ export class VideoScreen {
     const height = width * (9 / 16);
     this.mesh.geometry.dispose();
     this.mesh.geometry = new PlaneGeometry(width, height);
-    const glow = this.group.children.find((child) => child !== this.mesh) as Mesh | undefined;
-    if (glow?.isMesh) {
-      glow.geometry.dispose();
-      glow.geometry = new PlaneGeometry(width * 1.04, height * 1.04);
-    }
+    this.glow.geometry.dispose();
+    this.glow.geometry = new PlaneGeometry(width * 1.04, height * 1.04);
+    this.echo.layout(width, height);
   }
 
   async play(at = 0): Promise<void> {
     this.paused = false;
     this.ended = false;
     (this.mesh.material as MeshBasicMaterial).opacity = 1;
+    this.echo.setPlaying(true);
     if (!this.video) {
       this.usingFallback = true;
       this.clock = at;
@@ -138,6 +145,7 @@ export class VideoScreen {
   }
 
   update(dt: number): void {
+    this.echo.update(dt, this.paused || this.ended);
     if (this.paused) return;
     if (this.usingFallback) {
       this.clock += dt;
@@ -160,5 +168,10 @@ export class VideoScreen {
     } else if (!this.paused && !this.ended) {
       void this.video?.play();
     }
+  }
+
+  hide(): void {
+    this.group.visible = false;
+    this.echo.setPlaying(false);
   }
 }

@@ -88,7 +88,7 @@ export class MovieScene {
       const def = object.object;
       const behavior = behaviorFromLabel(def.label, def.behavior);
       updateReaction(object.reaction, dt);
-      if (behavior === 'rain') continue;
+      if (behavior === 'rain' || behavior === 'snow') continue;
       const age = time - object.born;
       if (age < config.popOutSeconds) {
         const t = easeInOut(age / config.popOutSeconds);
@@ -170,14 +170,18 @@ export class MovieScene {
     const def = this.catalog.find((item) => item.id === moment.objectId);
     if (!def) return;
     const behavior = behaviorFromLabel(def.label, def.behavior);
-    if (behavior === 'rain') {
+    if (behavior === 'rain' || behavior === 'snow') {
+      this.rain.setKind(behavior === 'snow' ? 'snow' : 'rain');
       this.rain.points.visible = true;
       this.rain.setCenter(new Vector3(head.x, head.y + 0.6, head.z + forward.z * 0.8));
       this.spawned.add(moment.id);
       this.activeEffects.add(moment.id);
       return;
     }
-    const liveObjects = this.objects.filter((o) => behaviorFromLabel(o.object.label, o.object.behavior) !== 'rain');
+    const liveObjects = this.objects.filter((o) => {
+      const b = behaviorFromLabel(o.object.label, o.object.behavior);
+      return b !== 'rain' && b !== 'snow';
+    });
     if (liveObjects.length >= config.maxMovieObjects) {
       this.despawn(liveObjects[0].id);
     }

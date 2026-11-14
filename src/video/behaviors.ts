@@ -14,6 +14,8 @@ const LABEL_BEHAVIOR: Record<string, BehaviorName> = {
   leaf: 'drift',
   petal: 'drift',
   rain: 'rain',
+  snow: 'snow',
+  storm: 'rain',
 };
 
 const BEHAVIOR_REACTION: Record<BehaviorName, ReactionName> = {
@@ -23,6 +25,7 @@ const BEHAVIOR_REACTION: Record<BehaviorName, ReactionName> = {
   drift: 'spin',
   hover: 'glow',
   rain: 'glow',
+  snow: 'glow',
 };
 
 export function behaviorFromLabel(label: string, override?: BehaviorName): BehaviorName {

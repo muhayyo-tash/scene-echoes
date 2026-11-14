@@ -89,7 +89,8 @@ import {
 } from '../scenes/placed-object.js';
 import { MovieScene } from '../scenes/movie.js';
 import { VideoScreen } from '../video/screen.js';
-import { parseTimelineMoments } from '../video/timeline.js';
+import { FilmAtmosphere } from '../video/film-atmosphere.js';
+import { parseTimelineAtmosphere, parseTimelineMoments } from '../video/timeline.js';
 import { mountDebugPanel, renderDebugPanel } from '../debug/panel.js';
 import type { HandSample } from '../core/hands.js';
 
@@ -109,11 +110,12 @@ export class SceneEchoesApp {
   explorer!: FileExplorer;
   objects: ManifestObject[] = [];
   entries: ExplorerEntry[] = [];
-  timeline: TimelineFile = { moments: [] };
+  timeline: TimelineFile = { moments: [], atmosphere: [] };
   modelSource!: ModelSource;
   films!: FilmProcessing;
   placedObjects: PlacedObject[] = [];
   movie = new MovieScene([]);
+  atmosphere = new FilmAtmosphere();
   screen = new VideoScreen();
   conversion = new ConversionAnimation();
   ghost = createGhostHand();
@@ -206,7 +208,7 @@ export class SceneEchoesApp {
       this.screen.group,
     );
     this.movie = new MovieScene([]);
-    this.scene.add(this.movie.group);
+    this.scene.add(this.movie.group, this.atmosphere.mesh);
   }
 
   async boot(): Promise<void> {
@@ -217,7 +219,11 @@ export class SceneEchoesApp {
     const explorer = parseExplorer(bundledExplorer);
     this.objects = manifest.manifest.objects;
     this.entries = explorerWithFilms(explorer.entries, bundledFilms.films ?? []);
-    this.timeline = { moments: parseTimelineMoments(bundledTimeline) };
+    this.timeline = {
+      moments: parseTimelineMoments(bundledTimeline),
+      atmosphere: parseTimelineAtmosphere(bundledTimeline),
+    };
+    this.atmosphere.setCues(this.timeline.atmosphere ?? []);
     this.explorer = new FileExplorer(this.entries, this.objects);
     await this.explorer.init();
     this.scene.add(this.explorer.group, this.explorer.photoGroup, this.explorer.iconGroup);
@@ -229,6 +235,7 @@ export class SceneEchoesApp {
     );
     this.movie = new MovieScene(this.objects);
     this.scene.add(this.movie.group);
+    if (!this.atmosphere.mesh.parent) this.scene.add(this.atmosphere.mesh);
     await this.screen.init();
     const filmsEx = this.films as FilmProcessing & { reset?(id: string): void; markReady?(id: string): void };
     for (const filmId of this.filmIds()) {
@@ -1338,12 +1345,19 @@ export class SceneEchoesApp {
     this.explorer.visible = false;
     const forward = forwardFrom(input.head.quaternion);
     this.screen.place(input.head.position, forward);
+    this.atmosphere.setPlaying(true);
     await this.screen.play(debugParams.startTime ?? 0);
   }
 
   private updateMovie(dt: number, input: FrameInput): void {
-    if (!this.space.movieOpen) return;
+    if (!this.space.movieOpen) {
+      this.atmosphere.setPlaying(false);
+      this.screen.echo.setPlaying(false);
+      this.atmosphere.update(dt, 0, input.head.position);
+      return;
+    }
     this.screen.update(dt);
+    this.atmosphere.update(dt, this.screen.currentTime(), input.head.position);
     const poke =
       pokeSurface(this.hands.left, distanceToScreen(this.hands.left.indexTip, this.screen), dt) ||
       pokeSurface(this.hands.right, distanceToScreen(this.hands.right.indexTip, this.screen), dt);
@@ -1596,7 +1610,11 @@ export class SceneEchoesApp {
       cacheModelTemplate(object.id, await loadGlbBytes(bytes));
     }
     this.movie.replaceCatalog(result.objects);
-    this.timeline = { moments: parseTimelineMoments(result.timeline) };
+    this.timeline = {
+      moments: parseTimelineMoments(result.timeline),
+      atmosphere: parseTimelineAtmosphere(result.timeline),
+    };
+    this.atmosphere.setCues(this.timeline.atmosphere ?? []);
     this.movie.reset();
   }
 

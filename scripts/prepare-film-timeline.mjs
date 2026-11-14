@@ -3,8 +3,8 @@
  * Offline movie demo prep (Gemini + Hugging Face).
  *
  * 1. Samples a frame at 1s, then every N seconds (default 5) from public/assets/movie/<id>.mp4
- * 2. Asks Gemini what the main object in each frame is
- * 3. Sends that same JPEG + label to SAM 3D Objects (Hugging Face) and writes the GLB
+ * 2. Asks Gemini for object + weather (rain/snow/none) per frame
+ * 3. Sends object frames to SAM 3D Objects (Hugging Face) and writes the GLB
  * 4. Writes public/assets/movie/timeline.json
  * 5. Merges movie objects into public/assets/manifest.json
  * 6. Refreshes films.json
@@ -23,9 +23,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  FILM_FRAME_PROMPT,
   geminiText,
   loadDotenv,
-  parseObjectName,
+  parseFilmFrame,
   reconstructObject,
 } from './live-reconstruct.mjs';
 import { writeFilmsIndex } from './list-films.mjs';
@@ -36,8 +37,6 @@ const modelsDir = join(root, 'public/assets/models');
 const manifestPath = join(root, 'public/assets/manifest.json');
 const timelinePath = join(movieDir, 'timeline.json');
 
-const FILM_NAME_PROMPT =
-  'This is one frame from a short film. Name the one main whole object that should become a 3D prop in the room, in one or two common English words. If the frame is only landscape, sky, or nothing distinct, reply none. If it is weather, reply rain. Do not name people, logos, or parts.';
 const SKIP_LABELS = new Set([
   'none',
   'nothing',
@@ -50,7 +49,6 @@ const SKIP_LABELS = new Set([
   'ground',
   'background',
 ]);
-const EFFECT_LABELS = new Set(['rain', 'snow', 'storm']);
 const LABEL_BEHAVIOR = {
   bird: 'fly',
   flamingo: 'fly',
@@ -66,6 +64,7 @@ const LABEL_BEHAVIOR = {
   leaf: 'drift',
   petal: 'drift',
   rain: 'rain',
+  snow: 'snow',
 };
 const SIDES = ['right', 'low-left', 'left', 'low-right'];
 
@@ -158,8 +157,12 @@ function behaviorFor(label) {
 function realSizeFor(behavior) {
   if (behavior === 'fly') return 0.28;
   if (behavior === 'walk') return 0.45;
-  if (behavior === 'rain') return 1;
+  if (behavior === 'rain' || behavior === 'snow') return 1;
   return 0.4;
+}
+
+function objectMomentCount(items) {
+  return items.filter((item) => item.kind !== 'effect').length;
 }
 
 function mergeManifest(movieObjects) {
@@ -202,34 +205,72 @@ async function main() {
   mkdirSync(modelsDir, { recursive: true });
 
   const chosen = [];
+  const atmosphere = [];
   const rebuilt = new Set();
+  let hfQuotaHit = false;
+  let useHf = !skipHf;
   for (let i = 0; i < times.length; i++) {
-    if (chosen.length >= max) break;
+    if (objectMomentCount(chosen) >= max) break;
     const time = times[i];
     const dest = join(frameDir, `t${String(time).replace('.', '_')}.jpg`);
     extractFrame(film.path, time, dest);
     const image = { bytes: readFileSync(dest), mime: 'image/jpeg' };
-    let label = '';
+    let frame;
     try {
-      label = parseObjectName(await geminiText(image, FILM_NAME_PROMPT));
+      frame = parseFilmFrame(await geminiText(image, FILM_FRAME_PROMPT));
     } catch (error) {
       console.warn(`[prepare-film] ${time}s Gemini failed:`, error instanceof Error ? error.message : error);
       continue;
     }
-    if (!label || SKIP_LABELS.has(label)) {
-      console.log(`[prepare-film] ${time}s skip (${label || 'empty'})`);
+    console.log(
+      `[prepare-film] ${time}s Gemini → object=${frame.object || 'none'} weather=${frame.weather} theme=${frame.theme ? `${frame.theme.label} ${frame.theme.color}` : 'none'}`,
+    );
+
+    if (frame.theme) {
+      const lastTheme = atmosphere[atmosphere.length - 1];
+      if (!lastTheme || time - lastTheme.time >= every) {
+        atmosphere.push({
+          id: `atmo-${String(time).replace('.', '_')}`,
+          time,
+          color: frame.theme.color,
+          label: frame.theme.label,
+        });
+        console.log(`[prepare-film] ${time}s theme → ${frame.theme.label} ${frame.theme.color}`);
+      }
+    }
+
+    if (frame.weather !== 'none') {
+      const lastWeather = [...chosen].reverse().find((item) => item.kind === 'effect');
+      if (!lastWeather || time - lastWeather.time >= every) {
+        chosen.push({
+          momentId: `${frame.weather}-${String(time).replace('.', '_')}`,
+          time,
+          objectId: frame.weather,
+          label: frame.weather,
+          kind: 'effect',
+          behavior: frame.weather,
+        });
+        console.log(`[prepare-film] ${time}s weather → ${frame.weather}`);
+      }
+    }
+
+    const label = frame.object;
+    const labelKey = label.split(/\s+/)[0] ?? '';
+    if (!label || SKIP_LABELS.has(label) || SKIP_LABELS.has(labelKey)) {
+      if (frame.weather === 'none' && !frame.theme) {
+        console.log(`[prepare-film] ${time}s skip (no object/weather/theme)`);
+      }
       continue;
     }
     const objectId = slug(label);
-    const lastSame = [...chosen].reverse().find((item) => item.label === label);
+    const lastSame = [...chosen].reverse().find((item) => item.label === label && item.kind === 'object');
     if (lastSame && time - lastSame.time < every) {
       console.log(`[prepare-film] ${time}s skip duplicate "${label}"`);
       continue;
     }
-    const isEffect = EFFECT_LABELS.has(label.split(/\s+/)[0]);
-    const behavior = isEffect ? 'rain' : behaviorFor(label);
+    const behavior = behaviorFor(label);
 
-    if (!isEffect && !skipHf && !rebuilt.has(objectId)) {
+    if (useHf && !rebuilt.has(objectId)) {
       const outPath = join(modelsDir, `${objectId}.glb`);
       if (existsSync(outPath)) {
         rebuilt.add(objectId);
@@ -245,15 +286,25 @@ async function main() {
             `[prepare-film] wrote public/assets/models/${objectId}.glb (${glb.length} bytes, ${((Date.now() - started) / 1000).toFixed(1)}s)`,
           );
         } catch (error) {
-          console.warn(
-            `[prepare-film] ${time}s HF reconstruct failed:`,
-            error instanceof Error ? error.message : error,
-          );
-          continue;
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[prepare-film] ${time}s HF reconstruct failed:`, message);
+          if (/quota|ZeroGPU|exceeded/i.test(message)) {
+            hfQuotaHit = true;
+            useHf = false;
+            console.warn(
+              '[prepare-film] HF quota hit — continuing timeline/theme only (no more GLB calls). Re-run later for GLBs.',
+            );
+            // Keep the moment in the timeline; GLB can be filled on a later run.
+          } else {
+            continue;
+          }
         }
       }
-    } else if (!isEffect && !skipHf && rebuilt.has(objectId)) {
+    } else if (useHf && rebuilt.has(objectId)) {
       console.log(`[prepare-film] ${time}s reuse existing ${objectId}.glb`);
+    } else if (!useHf) {
+      // Timeline-only: still record the object; GLB may be missing until a later HF run.
+      console.log(`[prepare-film] ${time}s timeline-only "${label}" (no HF)`);
     }
 
     chosen.push({
@@ -261,10 +312,14 @@ async function main() {
       time,
       objectId,
       label,
-      kind: isEffect ? 'effect' : 'object',
+      kind: 'object',
       behavior,
     });
     console.log(`[prepare-film] ${time}s → ${label} (${objectId}, ${behavior})`);
+  }
+
+  if (hfQuotaHit) {
+    console.warn('[prepare-film] finished with HF quota limited; some GLBs may be missing.');
   }
 
   if (!chosen.length) {
@@ -300,7 +355,7 @@ async function main() {
     lifetime: 30,
   }));
 
-  writeFileSync(timelinePath, `${JSON.stringify({ moments }, null, 2)}\n`);
+  writeFileSync(timelinePath, `${JSON.stringify({ moments, atmosphere }, null, 2)}\n`);
   mergeManifest(movieObjects);
   writeFilmsIndex(movieDir);
 
@@ -308,7 +363,9 @@ async function main() {
     .filter((o) => o.kind !== 'effect' && o.model && !existsSync(join(root, 'public', o.model)))
     .map((o) => o.model);
 
-  console.log(`[prepare-film] wrote ${timelinePath} (${moments.length} moments)`);
+  console.log(
+    `[prepare-film] wrote ${timelinePath} (${moments.length} moments, ${atmosphere.length} atmosphere cues)`,
+  );
   console.log(`[prepare-film] updated ${manifestPath} (+${movieObjects.length} movie objects)`);
   console.log(`[prepare-film] refreshed films.json`);
   if (missing.length) {

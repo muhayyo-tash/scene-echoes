@@ -2,7 +2,7 @@ export type SceneKind = 'object3d' | 'book' | 'movie';
 export type ObjectKind = 'object' | 'effect';
 export type UpAxis = 'y' | 'z';
 export type Landing = 'float' | 'perch';
-export type BehaviorName = 'fly' | 'walk' | 'sway' | 'drift' | 'hover' | 'rain';
+export type BehaviorName = 'fly' | 'walk' | 'sway' | 'drift' | 'hover' | 'rain' | 'snow';
 export type ReactionName = 'wobble' | 'hop' | 'spin' | 'glow' | 'dart' | 'pause';
 export type ExplorerType = 'photo' | 'video';
 export type SlotName = 'left' | 'right' | 'low-left' | 'low-right';
@@ -64,8 +64,17 @@ export interface TimelineMoment {
   lifetime?: number;
 }
 
+/** Soft room wash sampled from a film frame (hex color). */
+export interface AtmosphereCue {
+  id: string;
+  time: number;
+  color: string;
+  label?: string;
+}
+
 export interface TimelineFile {
   moments: TimelineMoment[];
+  atmosphere?: AtmosphereCue[];
 }
 
 export interface ValidationIssue {

@@ -53,10 +53,10 @@ describe('timeline', () => {
     expect(issues.some((issue) => issue.level === 'error')).toBe(true);
   });
 
-  it('starts with an empty bundled timeline', () => {
-    expect(bundledTimeline.moments).toEqual([]);
+  it('ships a baked park film timeline with movie objects', () => {
+    expect(bundledTimeline.moments.length).toBeGreaterThan(0);
     expect(parseManifest(bundledManifest).manifest.objects.some((object) => object.scene === 'movie')).toBe(
-      false,
+      true,
     );
   });
 });
