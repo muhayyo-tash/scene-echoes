@@ -9,55 +9,40 @@ import {
 
 /**
  * Soft transparent continuation of the film beyond the opaque video plate.
- * Same frame texture, larger planes behind the player — room stays visible through them.
+ * One large plane behind the player — room stays visible through it.
  */
 export class FilmEcho {
   readonly group = new Group();
-  private near: Mesh;
-  private mid: Mesh;
-  private far: Mesh;
+  private plate: Mesh;
   private strength = 0;
   private active = false;
   private bound: Texture | null = null;
+  /** Size relative to the opaque player. */
+  private readonly echoScale = 2.6;
+  private readonly baseOpacity = 0.18;
 
   constructor() {
-    // Scales are relative to the opaque player — wider spill, readable but still see-through.
-    this.near = this.makePlate(1.55, 0.2, -0.05);
-    this.mid = this.makePlate(2.15, 0.14, -0.12);
-    this.far = this.makePlate(2.9, 0.09, -0.22);
-    this.group.add(this.far, this.mid, this.near);
-    this.group.name = 'film-echo';
-    this.group.visible = false;
-  }
-
-  private makePlate(scale: number, opacity: number, z: number): Mesh {
-    const mesh = new Mesh(
+    this.plate = new Mesh(
       new PlaneGeometry(1, 1),
       new MeshBasicMaterial({
         transparent: true,
-        opacity,
+        opacity: this.baseOpacity,
         depthWrite: false,
         toneMapped: false,
       }),
     );
-    mesh.position.z = z;
-    mesh.userData.echoScale = scale;
-    mesh.userData.baseOpacity = opacity;
-    mesh.renderOrder = -2;
-    return mesh;
-  }
-
-  private plates(): Mesh[] {
-    return [this.near, this.mid, this.far];
+    this.plate.position.z = -0.08;
+    this.plate.renderOrder = -2;
+    this.group.add(this.plate);
+    this.group.name = 'film-echo';
+    this.group.visible = false;
   }
 
   bindTexture(texture: Texture): void {
     this.bound = texture;
-    for (const plate of this.plates()) {
-      const mat = plate.material as MeshBasicMaterial;
-      mat.map = texture;
-      mat.needsUpdate = true;
-    }
+    const mat = this.plate.material as MeshBasicMaterial;
+    mat.map = texture;
+    mat.needsUpdate = true;
   }
 
   setPlaying(on: boolean): void {
@@ -66,31 +51,23 @@ export class FilmEcho {
     if (!on) this.strength = 0;
   }
 
-  /** Match opaque screen size; echo planes grow past the bezel. */
+  /** Match opaque screen size; echo grows past the bezel as one sheet. */
   layout(width: number, height: number): void {
-    for (const plate of this.plates()) {
-      const scale = Number(plate.userData.echoScale) || 1.4;
-      plate.geometry.dispose();
-      plate.geometry = new PlaneGeometry(width * scale, height * scale);
-    }
+    this.plate.geometry.dispose();
+    this.plate.geometry = new PlaneGeometry(width * this.echoScale, height * this.echoScale);
   }
 
   update(dt: number, paused: boolean): void {
     const goal = this.active && this.bound ? (paused ? 0.55 : 1) : 0;
     this.strength += (goal - this.strength) * Math.min(1, dt * 2.4);
-    for (const plate of this.plates()) {
-      const mat = plate.material as MeshBasicMaterial;
-      const base = Number(plate.userData.baseOpacity) || 0.1;
-      mat.opacity = base * this.strength;
-      mat.visible = mat.opacity > 0.004;
-    }
+    const mat = this.plate.material as MeshBasicMaterial;
+    mat.opacity = this.baseOpacity * this.strength;
+    mat.visible = mat.opacity > 0.004;
     this.group.visible = this.active && this.strength > 0.02;
   }
 
   dispose(): void {
-    for (const plate of this.plates()) {
-      plate.geometry.dispose();
-      (plate.material as Material).dispose();
-    }
+    this.plate.geometry.dispose();
+    (this.plate.material as Material).dispose();
   }
 }
