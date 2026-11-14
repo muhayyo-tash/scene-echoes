@@ -1,4 +1,5 @@
 import {
+  CanvasTexture,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
@@ -9,11 +10,12 @@ import {
 
 /**
  * Soft transparent continuation of the film beyond the opaque video plate.
- * One large plane behind the player — room stays visible through it.
+ * One large plane behind the player — edges feather out so there is no hard frame.
  */
 export class FilmEcho {
   readonly group = new Group();
   private plate: Mesh;
+  private readonly edgeMask: CanvasTexture;
   private strength = 0;
   private active = false;
   private bound: Texture | null = null;
@@ -22,6 +24,7 @@ export class FilmEcho {
   private readonly baseOpacity = 0.28;
 
   constructor() {
+    this.edgeMask = createSoftEdgeAlphaMap();
     this.plate = new Mesh(
       new PlaneGeometry(1, 1),
       new MeshBasicMaterial({
@@ -29,6 +32,7 @@ export class FilmEcho {
         opacity: this.baseOpacity,
         depthWrite: false,
         toneMapped: false,
+        alphaMap: this.edgeMask,
       }),
     );
     this.plate.position.z = -0.08;
@@ -42,6 +46,7 @@ export class FilmEcho {
     this.bound = texture;
     const mat = this.plate.material as MeshBasicMaterial;
     mat.map = texture;
+    mat.alphaMap = this.edgeMask;
     mat.needsUpdate = true;
   }
 
@@ -69,5 +74,40 @@ export class FilmEcho {
   dispose(): void {
     this.plate.geometry.dispose();
     (this.plate.material as Material).dispose();
+    this.edgeMask.dispose();
   }
+}
+
+/** Rectangular soft mask: opaque in the center, fades to 0 at the borders. */
+function createSoftEdgeAlphaMap(): CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  // Fade starts ~28% in from each edge so the rim disappears gradually.
+  const fade = 0.28;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / (size - 1);
+      const v = y / (size - 1);
+      const edge = Math.min(u, v, 1 - u, 1 - v);
+      let a = edge / fade;
+      if (a < 0) a = 0;
+      else if (a > 1) a = 1;
+      // Smoothstep for a softer falloff.
+      a = a * a * (3 - 2 * a);
+      const g = Math.round(a * 255);
+      const i = (y * size + x) * 4;
+      img.data[i] = g;
+      img.data[i + 1] = g;
+      img.data[i + 2] = g;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const texture = new CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }
