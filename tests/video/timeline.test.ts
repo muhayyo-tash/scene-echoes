@@ -53,11 +53,11 @@ describe('timeline', () => {
     expect(issues.some((issue) => issue.level === 'error')).toBe(true);
   });
 
-  it('ships a baked park film timeline with movie objects', () => {
-    expect(bundledTimeline.moments.length).toBeGreaterThan(0);
-    expect(parseManifest(bundledManifest).manifest.objects.some((object) => object.scene === 'movie')).toBe(
-      true,
-    );
+  it('ships per-film timelines (no shared legacy moments)', () => {
+    expect(bundledTimeline.films).toBeTruthy();
+    expect(bundledTimeline.films.mountains?.moments ?? []).toEqual([]);
+    expect(bundledTimeline.films.park_winter?.moments ?? []).toEqual([]);
+    expect(bundledTimeline.moments).toBeUndefined();
   });
 });
 

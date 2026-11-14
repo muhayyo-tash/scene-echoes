@@ -167,11 +167,30 @@ function objectMomentCount(items) {
 
 function mergeManifest(movieObjects) {
   const current = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  // Keep sofa/eagle/etc.; replace previous movie props with this run's set.
-  const nonMovie = (current.objects ?? []).filter((o) => o.scene !== 'movie');
-  const objects = [...nonMovie, ...movieObjects];
+  // Upsert by id so other films' movie props stay in the catalog.
+  const byId = new Map((current.objects ?? []).map((o) => [o.id, o]));
+  for (const entry of movieObjects) byId.set(entry.id, entry);
+  const objects = [...byId.values()];
   writeFileSync(manifestPath, `${JSON.stringify({ objects }, null, 2)}\n`);
   return objects;
+}
+
+function writeFilmTimeline(filmId, moments, atmosphere) {
+  let library = { films: {} };
+  if (existsSync(timelinePath)) {
+    try {
+      const raw = JSON.parse(readFileSync(timelinePath, 'utf8'));
+      if (raw?.films && typeof raw.films === 'object') library = raw;
+    } catch {
+      /* start fresh */
+    }
+  }
+  if (!library.films || typeof library.films !== 'object') library.films = {};
+  library.films[filmId] = { moments, atmosphere };
+  // Drop legacy root moments so they cannot leak into every film at runtime.
+  delete library.moments;
+  delete library.atmosphere;
+  writeFileSync(timelinePath, `${JSON.stringify(library, null, 2)}\n`);
 }
 
 async function main() {
@@ -355,7 +374,7 @@ async function main() {
     lifetime: 30,
   }));
 
-  writeFileSync(timelinePath, `${JSON.stringify({ moments, atmosphere }, null, 2)}\n`);
+  writeFilmTimeline(film.id, moments, atmosphere);
   mergeManifest(movieObjects);
   writeFilmsIndex(movieDir);
 
@@ -364,7 +383,7 @@ async function main() {
     .map((o) => o.model);
 
   console.log(
-    `[prepare-film] wrote ${timelinePath} (${moments.length} moments, ${atmosphere.length} atmosphere cues)`,
+    `[prepare-film] wrote ${timelinePath} film "${film.id}" (${moments.length} moments, ${atmosphere.length} atmosphere cues)`,
   );
   console.log(`[prepare-film] updated ${manifestPath} (+${movieObjects.length} movie objects)`);
   console.log(`[prepare-film] refreshed films.json`);

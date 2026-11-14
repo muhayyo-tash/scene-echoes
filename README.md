@@ -128,7 +128,7 @@ Objects go to Hugging Face for a GLB; rain/snow become room particles; theme bec
 Writes:
 
 - `public/assets/models/<object>.glb` — reconstructed props
-- `public/assets/movie/timeline.json` — object/weather moments + atmosphere color cues
+- `public/assets/movie/timeline.json` — **per film id** object/weather moments + atmosphere cues (`films.<id>`)
 - movie entries in `public/assets/manifest.json`
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 

@@ -77,6 +77,14 @@ export interface TimelineFile {
   atmosphere?: AtmosphereCue[];
 }
 
+/** Bundled movie timelines keyed by film id (mp4 basename). */
+export interface TimelineLibrary {
+  films?: Record<string, TimelineFile>;
+  /** @deprecated legacy single-timeline shape — migrated on load */
+  moments?: TimelineMoment[];
+  atmosphere?: AtmosphereCue[];
+}
+
 export interface ValidationIssue {
   level: 'error' | 'warning';
   message: string;

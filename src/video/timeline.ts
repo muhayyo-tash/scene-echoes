@@ -1,4 +1,4 @@
-import type { AtmosphereCue, TimelineMoment } from '../assets/types.js';
+import type { AtmosphereCue, TimelineFile, TimelineLibrary, TimelineMoment } from '../assets/types.js';
 import { config } from '../config.js';
 import { parseAtmosphereColor } from './film-atmosphere.js';
 
@@ -72,4 +72,32 @@ export function parseTimelineAtmosphere(data: unknown): AtmosphereCue[] {
     });
   }
   return cues.sort((a, b) => a.time - b.time);
+}
+
+export function emptyTimeline(): TimelineFile {
+  return { moments: [], atmosphere: [] };
+}
+
+/** Load per-film timelines. Legacy root moments are ignored (too easy to leak across films). */
+export function parseTimelineLibrary(data: unknown): Map<string, TimelineFile> {
+  const map = new Map<string, TimelineFile>();
+  const root = data as TimelineLibrary | null;
+  const films = root?.films;
+  if (films && typeof films === 'object') {
+    for (const [id, file] of Object.entries(films)) {
+      map.set(id, {
+        moments: parseTimelineMoments(file),
+        atmosphere: parseTimelineAtmosphere(file),
+      });
+    }
+  }
+  return map;
+}
+
+export function timelineForFilm(
+  library: Map<string, TimelineFile>,
+  filmId: string | null | undefined,
+): TimelineFile {
+  if (!filmId) return emptyTimeline();
+  return library.get(filmId) ?? emptyTimeline();
 }

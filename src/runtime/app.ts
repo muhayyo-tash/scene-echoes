@@ -90,7 +90,12 @@ import {
 import { MovieScene } from '../scenes/movie.js';
 import { VideoScreen } from '../video/screen.js';
 import { FilmAtmosphere } from '../video/film-atmosphere.js';
-import { parseTimelineAtmosphere, parseTimelineMoments } from '../video/timeline.js';
+import {
+  parseTimelineAtmosphere,
+  parseTimelineLibrary,
+  parseTimelineMoments,
+  timelineForFilm,
+} from '../video/timeline.js';
 import { mountDebugPanel, renderDebugPanel } from '../debug/panel.js';
 import type { HandSample } from '../core/hands.js';
 
@@ -111,6 +116,7 @@ export class SceneEchoesApp {
   objects: ManifestObject[] = [];
   entries: ExplorerEntry[] = [];
   timeline: TimelineFile = { moments: [], atmosphere: [] };
+  private timelinesByFilm = new Map<string, TimelineFile>();
   modelSource!: ModelSource;
   films!: FilmProcessing;
   placedObjects: PlacedObject[] = [];
@@ -220,11 +226,8 @@ export class SceneEchoesApp {
     const explorer = parseExplorer(bundledExplorer);
     this.objects = manifest.manifest.objects;
     this.entries = explorerWithFilms(explorer.entries, bundledFilms.films ?? []);
-    this.timeline = {
-      moments: parseTimelineMoments(bundledTimeline),
-      atmosphere: parseTimelineAtmosphere(bundledTimeline),
-    };
-    this.atmosphere.setCues(this.timeline.atmosphere ?? []);
+    this.timelinesByFilm = parseTimelineLibrary(bundledTimeline);
+    this.applyFilmTimeline(null);
     this.explorer = new FileExplorer(this.entries, this.objects);
     await this.explorer.init();
     this.scene.add(this.explorer.group, this.explorer.photoGroup, this.explorer.iconGroup);
@@ -1369,6 +1372,8 @@ export class SceneEchoesApp {
     if (!filmId) return;
     // Bind this film's MP4 even when localStorage already marked it ready.
     await this.screen.preload(filmId);
+    // Moments/atmosphere are per film id — never reuse another video's props.
+    this.applyFilmTimeline(filmId);
     this.space = openMovie(this.space);
     // Same as photo: folder must leave so only the big screen remains.
     this.explorer.setOpen(false, {
@@ -1645,10 +1650,17 @@ export class SceneEchoesApp {
       cacheModelTemplate(object.id, await loadGlbBytes(bytes));
     }
     this.movie.replaceCatalog(result.objects);
-    this.timeline = {
+    const filmId = this.activeFilmId ?? this.filmIds()[0] ?? 'live';
+    const file = {
       moments: parseTimelineMoments(result.timeline),
       atmosphere: parseTimelineAtmosphere(result.timeline),
     };
+    this.timelinesByFilm.set(filmId, file);
+    this.applyFilmTimeline(filmId);
+  }
+
+  private applyFilmTimeline(filmId: string | null): void {
+    this.timeline = timelineForFilm(this.timelinesByFilm, filmId);
     this.atmosphere.setCues(this.timeline.atmosphere ?? []);
     this.movie.reset();
   }
