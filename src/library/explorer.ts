@@ -19,6 +19,7 @@ import {
   drawSofaPhoto,
   makeGuidanceCanvas,
   makeLabelCanvas,
+  FINDER_SIDEBAR,
   type FinderSection,
 } from '../assets/drawn.js';
 import { loadTexture } from '../assets/loaders.js';
@@ -44,6 +45,7 @@ export interface ExplorerCard {
   id: string;
   type: ExplorerEntry['type'];
   mesh: Mesh;
+  hit: Mesh;
   layout: CardLayout;
   glow: Mesh;
   label?: Mesh;
@@ -120,7 +122,15 @@ export class FileExplorer {
       // Labels must not steal the hand-ray from the card mesh.
       label.raycast = () => undefined;
       this.group.add(glow, mesh, cardHit, label);
-      const card: ExplorerCard = { id: layout.id, type: layout.type, mesh, layout, glow, label };
+      const card: ExplorerCard = {
+        id: layout.id,
+        type: layout.type,
+        mesh,
+        hit: cardHit,
+        layout,
+        glow,
+        label,
+      };
       this.cards.push(card);
     }
     this.applyFolder();
@@ -381,17 +391,24 @@ export class FileExplorer {
     return this.world.distanceTo(point as never) < radius;
   }
 
-  hitFolder(point: { x: number; y: number; z: number }, radius = 0.05): FinderSection | null {
+  hitFolder(point: { x: number; y: number; z: number }, _radius = 0.05): FinderSection | null {
     if (!this.visible || !this.group.visible) return null;
     this.group.updateWorldMatrix(true, true);
     let best: FinderSection | null = null;
-    let bestD = radius;
+    let bestScore = Number.POSITIVE_INFINITY;
     for (const mesh of this.sidebarHits) {
-      mesh.getWorldPosition(this.world);
-      const d = this.world.distanceTo(point as never);
-      if (d < bestD) {
+      mesh.updateWorldMatrix(true, true);
+      mesh.worldToLocal(this.world.set(point.x, point.y, point.z));
+      const geom = mesh.geometry as PlaneGeometry;
+      const hw = ((geom.parameters.width as number) || 0.1) * 0.5;
+      const hh = ((geom.parameters.height as number) || 0.05) * 0.5;
+      // Local AABB — avoids sphere tests that jumped to the wrong sidebar row.
+      if (Math.abs(this.world.x) > hw + 0.01 || Math.abs(this.world.y) > hh + 0.01) continue;
+      if (Math.abs(this.world.z) > 0.06) continue;
+      const score = Math.abs(this.world.y) + Math.abs(this.world.x) * 0.25;
+      if (score < bestScore) {
+        bestScore = score;
         best = mesh.userData.folder as FinderSection;
-        bestD = d;
       }
     }
     return best;
@@ -402,6 +419,11 @@ export class FileExplorer {
     this.folder = folder;
     this.paintWindow();
     this.applyFolder();
+  }
+
+  /** Hit mesh for a sidebar folder (used to rebind ray picks after AABB resolve). */
+  folderHitMesh(folder: FinderSection): Mesh | null {
+    return this.sidebarHits.find((mesh) => mesh.userData.folder === folder) ?? null;
   }
 
   hitTest(point: { x: number; y: number; z: number }, radius = 0.12): ExplorerCard | null {
@@ -450,24 +472,24 @@ export class FileExplorer {
     );
     this.moveHit.position.set(titleCenter.x, titleCenter.y, 0.014);
     this.moveHit.userData.finderMove = true;
-    const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
-    // Must match drawFinderWindow sidebar metrics.
-    const sideW = Math.floor(CHROME_W * 0.28);
+    const folders: FinderSection[] = ['pictures', 'movies'];
+    // Must match drawFinderWindow sidebar metrics (no Favorites).
+    const sideW = Math.floor(CHROME_W * FINDER_SIDEBAR.ratio);
     const sideTop = 8 + titleH + 10;
-    const rowH = 56;
-    const rowGap = 12;
+    const { rowH, rowGap, topPad } = FINDER_SIDEBAR;
     folders.forEach((id, index) => {
-      const cy = sideTop + 20 + index * (rowH + rowGap) + rowH * 0.5;
+      const cy = sideTop + topPad + index * (rowH + rowGap) + rowH * 0.5;
       const center = chromeToLocal(8 + sideW * 0.5, cy);
+      // Keep plates inside their row so Pictures/Movies never share a ray hit.
       const hit = new Mesh(
         new PlaneGeometry(
-          (sideW / CHROME_W) * FINDER_WIDTH * 1.05,
-          (rowH / CHROME_H) * FINDER_HEIGHT * 1.35,
+          (sideW / CHROME_W) * FINDER_WIDTH * 1.08,
+          (rowH / CHROME_H) * FINDER_HEIGHT * 1.05,
         ),
         new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
       );
-      // In front of cards/drag so Movies/Pictures/Favorites win the ray.
-      hit.position.set(center.x, center.y, 0.03);
+      // In front of cards/drag so Pictures/Movies win the ray.
+      hit.position.set(center.x, center.y, 0.04);
       hit.userData.folder = id;
       this.sidebarHits.push(hit);
       this.group.add(hit);
@@ -495,17 +517,34 @@ export class FileExplorer {
   }
 
   private cardVisible(card: ExplorerCard): boolean {
-    if (this.folder === 'favorites') return true;
     if (this.folder === 'pictures') return card.type === 'photo';
     return card.type === 'video';
   }
 
   private applyFolder(): void {
+    // Re-pack only the visible folder items so Movies #2 is not stuck at a
+    // global index that sits past the right chrome edge.
+    const visible = this.cards.filter((card) => this.cardVisible(card));
+    const packed = layoutExplorerCards(
+      visible.map((card) => ({ id: card.id, type: card.type })),
+      FINDER_WIDTH,
+    );
+    const byId = new Map(packed.map((layout) => [layout.id, layout]));
     for (const card of this.cards) {
       const on = this.cardVisible(card);
       card.mesh.visible = on;
+      card.hit.visible = on;
       card.glow.visible = on;
       if (card.label) card.label.visible = on;
+      const layout = byId.get(card.id);
+      if (!layout) continue;
+      card.layout = layout;
+      card.mesh.position.set(layout.x, layout.y, 0.012);
+      card.hit.position.set(layout.x, layout.y, 0.014);
+      card.glow.position.set(layout.x, layout.y, 0.008);
+      if (card.label) {
+        card.label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
+      }
     }
   }
 

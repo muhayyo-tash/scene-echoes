@@ -99,7 +99,15 @@ function roundRect(
   ctx.closePath();
 }
 
-export type FinderSection = 'favorites' | 'pictures' | 'movies';
+export type FinderSection = 'pictures' | 'movies';
+
+/** Sidebar row metrics — keep draw + hit plates in lockstep. */
+export const FINDER_SIDEBAR = {
+  ratio: 0.28,
+  rowH: 64,
+  rowGap: 18,
+  topPad: 28,
+} as const;
 
 export function drawFinderWindow(
   ctx: CanvasRenderingContext2D,
@@ -136,7 +144,6 @@ export function drawFinderWindow(
   });
 
   const titles: Record<FinderSection, string> = {
-    favorites: 'Favorites',
     pictures: 'Pictures',
     movies: 'Movies',
   };
@@ -146,20 +153,19 @@ export function drawFinderWindow(
   ctx.textBaseline = 'middle';
   ctx.fillText(`Meta Echoes · ${titles[selected]}`, w * 0.5, lightsY);
 
-  const sideW = Math.floor(w * 0.28);
+  const sideW = Math.floor(w * FINDER_SIDEBAR.ratio);
   const sideTop = 8 + titleH + 10;
   ctx.fillStyle = '#f4f4f7';
   ctx.fillRect(8, sideTop, sideW, h - 16 - sideTop + 8);
   ctx.fillStyle = '#e2e2e8';
   ctx.fillRect(8 + sideW, sideTop, 1, h - 16 - sideTop + 8);
 
-  const rows: FinderSection[] = ['favorites', 'pictures', 'movies'];
-  const rowH = 56;
-  const rowGap = 12;
+  const rows: FinderSection[] = ['pictures', 'movies'];
+  const { rowH, rowGap, topPad } = FINDER_SIDEBAR;
   ctx.textAlign = 'left';
   ctx.font = `700 ${Math.max(34, Math.floor(h * 0.058))}px -apple-system, BlinkMacSystemFont, sans-serif`;
   rows.forEach((id, index) => {
-    const y = sideTop + 20 + index * (rowH + rowGap);
+    const y = sideTop + topPad + index * (rowH + rowGap);
     if (id === selected) {
       roundRect(ctx, 14, y, sideW - 14, rowH, 10);
       ctx.fillStyle = '#d9e4f5';

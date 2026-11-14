@@ -89,9 +89,7 @@ import {
 } from '../scenes/placed-object.js';
 import { MovieScene } from '../scenes/movie.js';
 import { VideoScreen } from '../video/screen.js';
-import { FilmAtmosphere } from '../video/film-atmosphere.js';
 import {
-  parseTimelineAtmosphere,
   parseTimelineLibrary,
   parseTimelineMoments,
   timelineForFilm,
@@ -115,13 +113,12 @@ export class SceneEchoesApp {
   explorer!: FileExplorer;
   objects: ManifestObject[] = [];
   entries: ExplorerEntry[] = [];
-  timeline: TimelineFile = { moments: [], atmosphere: [] };
+  timeline: TimelineFile = { moments: [] };
   private timelinesByFilm = new Map<string, TimelineFile>();
   modelSource!: ModelSource;
   films!: FilmProcessing;
   placedObjects: PlacedObject[] = [];
   movie = new MovieScene([]);
-  atmosphere = new FilmAtmosphere();
   screen = new VideoScreen();
   conversion = new ConversionAnimation();
   ghost = createGhostHand();
@@ -215,7 +212,7 @@ export class SceneEchoesApp {
       this.screen.group,
     );
     this.movie = new MovieScene([]);
-    this.scene.add(this.movie.group, this.atmosphere.mesh);
+    this.scene.add(this.movie.group);
   }
 
   async boot(): Promise<void> {
@@ -239,7 +236,6 @@ export class SceneEchoesApp {
     );
     this.movie = new MovieScene(this.objects);
     this.scene.add(this.movie.group);
-    if (!this.atmosphere.mesh.parent) this.scene.add(this.atmosphere.mesh);
     await this.screen.init();
     const filmsEx = this.films as FilmProcessing & { reset?(id: string): void; markReady?(id: string): void };
     for (const filmId of this.filmIds()) {
@@ -514,7 +510,15 @@ export class SceneEchoesApp {
       }) ??
       ranked[0] ??
       hits.find((entry) => entry.object.visible);
-    return preferred ? { object: preferred.object, point: preferred.point } : null;
+    if (!preferred) return null;
+    // Resolve Pictures vs Movies with local AABB so overlapping rays cannot
+    // latch onto the wrong sidebar row (Favorites used to steal Movies).
+    const folder = this.explorer.hitFolder(preferred.point, 0.12);
+    if (folder) {
+      const folderMesh = this.explorer.folderHitMesh(folder);
+      if (folderMesh) return { object: folderMesh, point: preferred.point };
+    }
+    return { object: preferred.object, point: preferred.point };
   }
 
   private uiKind(object: Object3D | null): {
@@ -1379,7 +1383,7 @@ export class SceneEchoesApp {
     if (!filmId) return;
     // Bind this film's MP4 even when localStorage already marked it ready.
     await this.screen.preload(filmId);
-    // Moments/atmosphere are per film id — never reuse another video's props.
+    // Moments are per film id — never reuse another video's props.
     this.applyFilmTimeline(filmId);
     this.space = openMovie(this.space);
     // Same as photo: folder must leave so only the big screen remains.
@@ -1392,19 +1396,15 @@ export class SceneEchoesApp {
     this.explorer.visible = false;
     const forward = forwardFrom(input.head.quaternion);
     this.screen.place(input.head.position, forward);
-    this.atmosphere.setPlaying(true);
     await this.screen.play(debugParams.startTime ?? 0);
   }
 
   private updateMovie(dt: number, input: FrameInput): void {
     if (!this.space.movieOpen) {
-      this.atmosphere.setPlaying(false);
       this.screen.echo.setPlaying(false);
-      this.atmosphere.update(dt, 0, input.head.position);
       return;
     }
     this.screen.update(dt);
-    this.atmosphere.update(dt, this.screen.currentTime(), input.head.position);
     const poke =
       pokeSurface(this.hands.left, distanceToScreen(this.hands.left.indexTip, this.screen), dt) ||
       pokeSurface(this.hands.right, distanceToScreen(this.hands.right.indexTip, this.screen), dt);
@@ -1603,13 +1603,13 @@ export class SceneEchoesApp {
       if (hits.some((hit) => hit.object.userData.close)) {
         return { kind: 'close', point, uv: null, onScreen: false };
       }
-      const folderHit = hits.find((hit) => typeof hit.object.userData.folder === 'string');
-      if (folderHit) {
+      const folder = this.explorer.hitFolder(point, 0.12);
+      if (folder) {
         return {
           kind: 'folder',
           point,
           uv: null,
-          folder: folderHit.object.userData.folder as FinderSection,
+          folder,
           onScreen: false,
         };
       }
@@ -1660,7 +1660,6 @@ export class SceneEchoesApp {
     const filmId = this.activeFilmId ?? this.filmIds()[0] ?? 'live';
     const file = {
       moments: parseTimelineMoments(result.timeline),
-      atmosphere: parseTimelineAtmosphere(result.timeline),
     };
     this.timelinesByFilm.set(filmId, file);
     this.applyFilmTimeline(filmId);
@@ -1668,7 +1667,6 @@ export class SceneEchoesApp {
 
   private applyFilmTimeline(filmId: string | null): void {
     this.timeline = timelineForFilm(this.timelinesByFilm, filmId);
-    this.atmosphere.setCues(this.timeline.atmosphere ?? []);
     this.movie.reset();
   }
 

@@ -1,6 +1,5 @@
-import type { AtmosphereCue, TimelineFile, TimelineLibrary, TimelineMoment } from '../assets/types.js';
+import type { TimelineFile, TimelineLibrary, TimelineMoment } from '../assets/types.js';
 import { config } from '../config.js';
-import { parseAtmosphereColor } from './film-atmosphere.js';
 
 export type MomentStage = 'idle' | 'outline' | 'appear' | 'behave' | 'leave';
 
@@ -55,27 +54,8 @@ export function parseTimelineMoments(data: unknown): TimelineMoment[] {
   return Array.isArray(moments) ? moments : [];
 }
 
-export function parseTimelineAtmosphere(data: unknown): AtmosphereCue[] {
-  const rows = (data as { atmosphere?: AtmosphereCue[] })?.atmosphere;
-  if (!Array.isArray(rows)) return [];
-  const cues: AtmosphereCue[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    const time = Number((row as AtmosphereCue).time);
-    const color = parseAtmosphereColor(String((row as AtmosphereCue).color ?? ''));
-    if (!Number.isFinite(time) || !color) continue;
-    cues.push({
-      id: String((row as AtmosphereCue).id ?? `atmo-${time}`),
-      time,
-      color,
-      label: (row as AtmosphereCue).label ? String((row as AtmosphereCue).label) : undefined,
-    });
-  }
-  return cues.sort((a, b) => a.time - b.time);
-}
-
 export function emptyTimeline(): TimelineFile {
-  return { moments: [], atmosphere: [] };
+  return { moments: [] };
 }
 
 /** Load per-film timelines. Legacy root moments are ignored (too easy to leak across films). */
@@ -87,7 +67,6 @@ export function parseTimelineLibrary(data: unknown): Map<string, TimelineFile> {
     for (const [id, file] of Object.entries(films)) {
       map.set(id, {
         moments: parseTimelineMoments(file),
-        atmosphere: parseTimelineAtmosphere(file),
       });
     }
   }

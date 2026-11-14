@@ -42,6 +42,56 @@
       "up": "y",
       "behavior": "hover",
       "model": "assets/models/deer.glb"
+    },
+    {
+      "id": "swan",
+      "scene": "movie",
+      "kind": "object",
+      "label": "swan",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/swan.glb"
+    },
+    {
+      "id": "cardinal",
+      "scene": "movie",
+      "kind": "object",
+      "label": "cardinal",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/cardinal.glb"
+    },
+    {
+      "id": "tree",
+      "scene": "movie",
+      "kind": "object",
+      "label": "tree",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "sway",
+      "model": "assets/models/tree.glb"
+    },
+    {
+      "id": "car",
+      "scene": "movie",
+      "kind": "object",
+      "label": "car",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/car.glb"
+    },
+    {
+      "id": "mountain",
+      "scene": "movie",
+      "kind": "object",
+      "label": "mountain",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/mountain.glb"
     }
   ]
 }

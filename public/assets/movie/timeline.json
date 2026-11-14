@@ -1,12 +1,103 @@
 {
   "films": {
     "mountains": {
-      "moments": [],
-      "atmosphere": []
+      "moments": [
+        {
+          "id": "mountain-1",
+          "time": 1,
+          "objectId": "mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 30
+        },
+        {
+          "id": "mountain-11",
+          "time": 11,
+          "objectId": "mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 30
+        }
+      ]
     },
     "park_winter": {
-      "moments": [],
-      "atmosphere": []
+      "moments": [
+        {
+          "id": "swan-1",
+          "time": 1,
+          "objectId": "swan",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 30
+        },
+        {
+          "id": "swan-6",
+          "time": 6,
+          "objectId": "swan",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 30
+        },
+        {
+          "id": "cardinal-11",
+          "time": 11,
+          "objectId": "cardinal",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
+          "lifetime": 30
+        },
+        {
+          "id": "tree-21",
+          "time": 21,
+          "objectId": "tree",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 30
+        },
+        {
+          "id": "car-26",
+          "time": 26,
+          "objectId": "car",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 30
+        }
+      ]
     }
   }
 }

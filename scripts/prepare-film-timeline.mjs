@@ -3,7 +3,7 @@
  * Offline movie demo prep (Gemini + Hugging Face).
  *
  * 1. Samples a frame at 1s, then every N seconds (default 5) from public/assets/movie/<id>.mp4
- * 2. Asks Gemini for object + weather (rain/snow/none) per frame
+ * 2. Asks Gemini for the main object per frame
  * 3. Sends object frames to SAM 3D Objects (Hugging Face) and writes the GLB
  * 4. Writes public/assets/movie/timeline.json
  * 5. Merges movie objects into public/assets/manifest.json
@@ -175,7 +175,7 @@ function mergeManifest(movieObjects) {
   return objects;
 }
 
-function writeFilmTimeline(filmId, moments, atmosphere) {
+function writeFilmTimeline(filmId, moments) {
   let library = { films: {} };
   if (existsSync(timelinePath)) {
     try {
@@ -186,7 +186,7 @@ function writeFilmTimeline(filmId, moments, atmosphere) {
     }
   }
   if (!library.films || typeof library.films !== 'object') library.films = {};
-  library.films[filmId] = { moments, atmosphere };
+  library.films[filmId] = { moments };
   // Drop legacy root moments so they cannot leak into every film at runtime.
   delete library.moments;
   delete library.atmosphere;
@@ -224,7 +224,6 @@ async function main() {
   mkdirSync(modelsDir, { recursive: true });
 
   const chosen = [];
-  const atmosphere = [];
   const rebuilt = new Set();
   let hfQuotaHit = false;
   let useHf = !skipHf;
@@ -241,44 +240,12 @@ async function main() {
       console.warn(`[prepare-film] ${time}s Gemini failed:`, error instanceof Error ? error.message : error);
       continue;
     }
-    console.log(
-      `[prepare-film] ${time}s Gemini → object=${frame.object || 'none'} weather=${frame.weather} theme=${frame.theme ? `${frame.theme.label} ${frame.theme.color}` : 'none'}`,
-    );
-
-    if (frame.theme) {
-      const lastTheme = atmosphere[atmosphere.length - 1];
-      if (!lastTheme || time - lastTheme.time >= every) {
-        atmosphere.push({
-          id: `atmo-${String(time).replace('.', '_')}`,
-          time,
-          color: frame.theme.color,
-          label: frame.theme.label,
-        });
-        console.log(`[prepare-film] ${time}s theme → ${frame.theme.label} ${frame.theme.color}`);
-      }
-    }
-
-    if (frame.weather !== 'none') {
-      const lastWeather = [...chosen].reverse().find((item) => item.kind === 'effect');
-      if (!lastWeather || time - lastWeather.time >= every) {
-        chosen.push({
-          momentId: `${frame.weather}-${String(time).replace('.', '_')}`,
-          time,
-          objectId: frame.weather,
-          label: frame.weather,
-          kind: 'effect',
-          behavior: frame.weather,
-        });
-        console.log(`[prepare-film] ${time}s weather → ${frame.weather}`);
-      }
-    }
+    console.log(`[prepare-film] ${time}s Gemini → object=${frame.object || 'none'}`);
 
     const label = frame.object;
     const labelKey = label.split(/\s+/)[0] ?? '';
     if (!label || SKIP_LABELS.has(label) || SKIP_LABELS.has(labelKey)) {
-      if (frame.weather === 'none' && !frame.theme) {
-        console.log(`[prepare-film] ${time}s skip (no object/weather/theme)`);
-      }
+      console.log(`[prepare-film] ${time}s skip (no object)`);
       continue;
     }
     const objectId = slug(label);
@@ -311,7 +278,7 @@ async function main() {
             hfQuotaHit = true;
             useHf = false;
             console.warn(
-              '[prepare-film] HF quota hit — continuing timeline/theme only (no more GLB calls). Re-run later for GLBs.',
+              '[prepare-film] HF quota hit — continuing timeline only (no more GLB calls). Re-run later for GLBs.',
             );
             // Keep the moment in the timeline; GLB can be filled on a later run.
           } else {
@@ -374,7 +341,7 @@ async function main() {
     lifetime: 30,
   }));
 
-  writeFilmTimeline(film.id, moments, atmosphere);
+  writeFilmTimeline(film.id, moments);
   mergeManifest(movieObjects);
   writeFilmsIndex(movieDir);
 
@@ -383,7 +350,7 @@ async function main() {
     .map((o) => o.model);
 
   console.log(
-    `[prepare-film] wrote ${timelinePath} film "${film.id}" (${moments.length} moments, ${atmosphere.length} atmosphere cues)`,
+    `[prepare-film] wrote ${timelinePath} film "${film.id}" (${moments.length} moments)`,
   );
   console.log(`[prepare-film] updated ${manifestPath} (+${movieObjects.length} movie objects)`);
   console.log(`[prepare-film] refreshed films.json`);

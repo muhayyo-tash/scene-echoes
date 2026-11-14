@@ -119,16 +119,16 @@ npm run prepare-film -- park.mp4
 
 Pass the full MP4 name (or path). Bare ids like `park` error.
 
-That extracts JPEG frames (at 1s, then every 5s) and asks Gemini for object, weather, and color mood on one line:
+That extracts JPEG frames (at 1s, then every 5s) and asks Gemini for the main object only:
 
-`object: deer | weather: rain | theme: warm gold #d2a679`
+`object: deer`
 
-Objects go to Hugging Face for a GLB; rain/snow become room particles; theme becomes a **very transparent** room color wash. While a film plays, the same frames also soft-expand past the video bezel as translucent echo planes (room still visible through them); the center panel stays the original opaque MP4. Expect **~1.5 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
+Objects go to Hugging Face for a GLB. Room mood comes from the soft video echo around the player, not from Gemini. While a film plays, frames soft-expand past the video bezel as a translucent echo (room still visible through it); the center panel stays the original opaque MP4. Expect **~1.5 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
 
 Writes:
 
 - `public/assets/models/<object>.glb` — reconstructed props
-- `public/assets/movie/timeline.json` — **per film id** object/weather moments + atmosphere cues (`films.<id>`)
+- `public/assets/movie/timeline.json` — **per film id** object moments (`films.<id>`)
 - movie entries in `public/assets/manifest.json`
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 
