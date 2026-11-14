@@ -20,7 +20,7 @@ export class FilmEcho {
   private active = false;
   private bound: Texture | null = null;
   /** Size relative to the opaque player. */
-  private readonly echoScale = 2.6;
+  private readonly echoScale = 3.35;
   private readonly baseOpacity = 0.28;
 
   constructor() {
