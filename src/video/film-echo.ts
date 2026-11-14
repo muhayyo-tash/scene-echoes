@@ -19,7 +19,7 @@ export class FilmEcho {
   private bound: Texture | null = null;
   /** Size relative to the opaque player. */
   private readonly echoScale = 2.6;
-  private readonly baseOpacity = 0.18;
+  private readonly baseOpacity = 0.28;
 
   constructor() {
     this.plate = new Mesh(
