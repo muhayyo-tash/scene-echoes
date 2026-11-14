@@ -13,6 +13,7 @@ import {
  */
 export class FilmEcho {
   readonly group = new Group();
+  private near: Mesh;
   private mid: Mesh;
   private far: Mesh;
   private strength = 0;
@@ -20,9 +21,11 @@ export class FilmEcho {
   private bound: Texture | null = null;
 
   constructor() {
-    this.mid = this.makePlate(1.35, 0.11, -0.06);
-    this.far = this.makePlate(1.72, 0.07, -0.14);
-    this.group.add(this.far, this.mid);
+    // Scales are relative to the opaque player — wider spill, readable but still see-through.
+    this.near = this.makePlate(1.55, 0.2, -0.05);
+    this.mid = this.makePlate(2.15, 0.14, -0.12);
+    this.far = this.makePlate(2.9, 0.09, -0.22);
+    this.group.add(this.far, this.mid, this.near);
     this.group.name = 'film-echo';
     this.group.visible = false;
   }
@@ -44,9 +47,13 @@ export class FilmEcho {
     return mesh;
   }
 
+  private plates(): Mesh[] {
+    return [this.near, this.mid, this.far];
+  }
+
   bindTexture(texture: Texture): void {
     this.bound = texture;
-    for (const plate of [this.mid, this.far]) {
+    for (const plate of this.plates()) {
       const mat = plate.material as MeshBasicMaterial;
       mat.map = texture;
       mat.needsUpdate = true;
@@ -61,7 +68,7 @@ export class FilmEcho {
 
   /** Match opaque screen size; echo planes grow past the bezel. */
   layout(width: number, height: number): void {
-    for (const plate of [this.mid, this.far]) {
+    for (const plate of this.plates()) {
       const scale = Number(plate.userData.echoScale) || 1.4;
       plate.geometry.dispose();
       plate.geometry = new PlaneGeometry(width * scale, height * scale);
@@ -69,11 +76,11 @@ export class FilmEcho {
   }
 
   update(dt: number, paused: boolean): void {
-    const goal = this.active && this.bound ? (paused ? 0.45 : 1) : 0;
+    const goal = this.active && this.bound ? (paused ? 0.55 : 1) : 0;
     this.strength += (goal - this.strength) * Math.min(1, dt * 2.4);
-    for (const plate of [this.mid, this.far]) {
+    for (const plate of this.plates()) {
       const mat = plate.material as MeshBasicMaterial;
-      const base = Number(plate.userData.baseOpacity) || 0.08;
+      const base = Number(plate.userData.baseOpacity) || 0.1;
       mat.opacity = base * this.strength;
       mat.visible = mat.opacity > 0.004;
     }
@@ -81,7 +88,7 @@ export class FilmEcho {
   }
 
   dispose(): void {
-    for (const plate of [this.mid, this.far]) {
+    for (const plate of this.plates()) {
       plate.geometry.dispose();
       (plate.material as Material).dispose();
     }

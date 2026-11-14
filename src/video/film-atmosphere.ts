@@ -46,8 +46,8 @@ export class FilmAtmosphere {
     this.current.lerp(this.target, Math.min(1, dt * 1.1));
     const mat = this.mesh.material as MeshBasicMaterial;
     mat.color.copy(this.current);
-    // Keep very transparent so passthrough stays readable.
-    const goal = this.active ? (cue ? 0.055 : 0.035) : 0;
+    // Soft room wash — readable palette bleed, passthrough still clear.
+    const goal = this.active ? (cue ? 0.08 : 0.055) : 0;
     this.strength += (goal - this.strength) * Math.min(1, dt * 2.2);
     mat.opacity = this.strength;
     mat.visible = this.strength > 0.002;
