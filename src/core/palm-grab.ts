@@ -25,19 +25,23 @@ function dist(
 }
 
 /**
- * True when at least `minTips` fingertips are curled toward the palm.
- * Default thresholds match a clear fist, not a loose pinch.
+ * True when enough fingertips are clearly curled into the palm.
+ * Defaults are strict so a relaxed / side hand does not count as a fist.
  */
 export function isPalmGrab(
   joints: PalmGrabJoints,
-  curlMeters = 0.055,
-  minTips = 3,
+  curlMeters = 0.042,
+  minTips = 4,
 ): boolean {
   const palm = joints.palm;
   if (!palm) return false;
   let curled = 0;
+  let seen = 0;
   for (const tip of joints.tips) {
-    if (tip && dist(tip, palm) <= curlMeters) curled += 1;
+    if (!tip) continue;
+    seen += 1;
+    if (dist(tip, palm) <= curlMeters) curled += 1;
   }
-  return curled >= minTips;
+  // Need a full tracked fist — missing tips should not count as curled.
+  return seen >= minTips && curled >= minTips;
 }

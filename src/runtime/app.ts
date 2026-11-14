@@ -174,6 +174,7 @@ export class SceneEchoesApp {
   private sceneFistOrigin: Vector3 | null = null;
   private sceneFistCooldown = 0;
   private sceneFistArmed = true;
+  private sceneFistOpenHold = 0;
   /** Bumped on timeout/cancel so a late GLB resolve cannot place after failure. */
   private conversionGen = 0;
   private desktopHold: {
@@ -801,18 +802,28 @@ export class SceneEchoesApp {
    * Empty-space load via Meta palm/power grab (fist), not pinch.
    * Meta keeps pinch for UI select; palm grab is the “heavier” gesture
    * (https://developers.meta.com/horizon/design/hands-interaction-types/).
+   * Requires a clear fist held steadily in front of the headset — hands at
+   * your sides or slight motion should not spawn the eagle.
    */
   private updateSceneHold(dt: number, input: FrameInput): void {
-    const anyFist =
-      this.handIsFist(this.hands.left) || this.handIsFist(this.hands.right);
-    if (!anyFist) {
-      this.sceneFistArmed = true;
+    const forward = forwardFrom(input.head.quaternion);
+    const intentional =
+      this.intentionalSceneFist(this.hands.left, input.head.position, forward) ||
+      this.intentionalSceneFist(this.hands.right, input.head.position, forward);
+
+    if (!intentional) {
       this.sceneFistHold = 0;
       this.sceneFistOrigin = null;
+      this.sceneFistOpenHold += dt;
+      if (this.sceneFistOpenHold >= config.sceneFistOpenSeconds) {
+        this.sceneFistArmed = true;
+      }
       // Cancel the “Hold fist…” preview if we never committed a load.
       if (!this.converting && !this.pendingConverted) {
         this.conversion.finish();
       }
+    } else {
+      this.sceneFistOpenHold = 0;
     }
 
     if (
@@ -822,20 +833,15 @@ export class SceneEchoesApp {
       this.converting ||
       this.pendingConverted ||
       this.sceneFistCooldown > 0 ||
-      !this.sceneFistArmed
+      !this.sceneFistArmed ||
+      !intentional
     ) {
-      if (!anyFist) {
-        /* armed above */
-      } else {
-        this.sceneFistHold = 0;
-        this.sceneFistOrigin = null;
-      }
       return;
     }
 
     let holding: HandRuntime | null = null;
     for (const hand of [this.hands.left, this.hands.right]) {
-      if (!this.handIsFist(hand)) continue;
+      if (!this.intentionalSceneFist(hand, input.head.position, forward)) continue;
       // Aiming at UI must never start a scene load.
       const ui = this.uiKind(this.uiPick(hand)?.object ?? null);
       if (ui) continue;
@@ -850,9 +856,12 @@ export class SceneEchoesApp {
     }
 
     const tip = holding.palm ?? holding.pinchPosition ?? holding.indexTip;
-    const pos = tip
-      ? new Vector3(tip.x, tip.y, tip.z)
-      : input.head.position.clone().add(new Vector3(0, -0.15, -0.45));
+    if (!tip) {
+      this.sceneFistHold = 0;
+      this.sceneFistOrigin = null;
+      return;
+    }
+    const pos = new Vector3(tip.x, tip.y, tip.z);
 
     if (!this.sceneFistOrigin) {
       this.sceneFistOrigin = pos.clone();
@@ -860,20 +869,20 @@ export class SceneEchoesApp {
     } else if (pos.distanceTo(this.sceneFistOrigin) > config.sceneFistMoveTolerance) {
       this.sceneFistOrigin.copy(pos);
       this.sceneFistHold = 0;
+      if (!this.converting && !this.pendingConverted) this.conversion.finish();
       return;
     }
 
     this.sceneFistHold += dt;
-    if (this.sceneFistHold < 0.25) {
+    if (this.sceneFistHold >= 0.45 && this.sceneFistHold < config.sceneFistHoldSeconds) {
       this.conversion.start(pos, true, 'Hold fist…');
-    } else if (this.sceneFistHold < config.sceneFistHoldSeconds) {
-      this.conversion.setMessage('Keep fist closed…');
     }
     if (this.sceneFistHold < config.sceneFistHoldSeconds) return;
 
     this.sceneFistHold = 0;
     this.sceneFistOrigin = null;
     this.sceneFistArmed = false;
+    this.sceneFistOpenHold = 0;
     this.sceneFistCooldown = config.sceneFistCooldownSeconds;
     holding.longPress.fired = false;
     void this.beginSceneCapture(pos);
@@ -891,6 +900,29 @@ export class SceneEchoesApp {
         joints['pinky-finger-tip'] ?? null,
       ],
     });
+  }
+
+  /** Fist only counts when clearly closed AND held out in front of the headset. */
+  private intentionalSceneFist(
+    hand: HandRuntime,
+    head: { x: number; y: number; z: number },
+    forward: { x: number; z: number },
+  ): boolean {
+    if (!this.handIsFist(hand)) return false;
+    const tip = hand.palm ?? hand.pinchPosition ?? hand.indexTip;
+    if (!tip) return false;
+    const dx = tip.x - head.x;
+    const dy = tip.y - head.y;
+    const dz = tip.z - head.z;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist < config.sceneFistMinDistance || dist > config.sceneFistMaxDistance) return false;
+    // Must be in front of the face (not at your sides / behind).
+    const flat = Math.hypot(dx, dz) || 1e-5;
+    const forwardDot = (dx / flat) * forward.x + (dz / flat) * forward.z;
+    if (forwardDot < 0.55) return false;
+    // Roughly chest-to-eye height — dropping hands down should not count.
+    if (dy < -0.35 || dy > 0.12) return false;
+    return true;
   }
 
   /** Spawn in clear view ahead of the headset (photo is dismissed before this). */

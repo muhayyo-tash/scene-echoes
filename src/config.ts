@@ -10,13 +10,18 @@ const numericDefaults = {
   longPressMoveTolerance: 0.18,
   /**
    * Empty-space scene load uses Meta palm/power grab (fist), not pinch.
-   * Hold a closed fist this long — pinch alone never commits.
+   * Hold a clear fist this long in front of you — pinch / side hands never commit.
    */
-  sceneFistHoldSeconds: 0.7,
+  sceneFistHoldSeconds: 1.25,
   /** Ignore fists that wander more than this while holding. */
-  sceneFistMoveTolerance: 0.1,
+  sceneFistMoveTolerance: 0.06,
   /** Cooldown after a scene/demo load so one fist cannot spawn many eagles. */
-  sceneFistCooldownSeconds: 3,
+  sceneFistCooldownSeconds: 5,
+  /** Must fully open the hand this long before another fist can arm. */
+  sceneFistOpenSeconds: 0.45,
+  /** Fist must stay roughly this far in front of the headset (meters). */
+  sceneFistMinDistance: 0.28,
+  sceneFistMaxDistance: 0.75,
   pokeDepth: 0.015,
   pokeCooldownMs: 300,
   palmTouchDistance: 0.03,

@@ -15,7 +15,7 @@ Aligned with [Meta’s hands interaction types](https://developers.meta.com/hori
 | **Fist** | Empty-space scene load (live API when keys are set; otherwise eagle demo) |
 | **Pinch** | Meta Echoes UI + open photo + 2D→3D pop |
 
-- **Fist** — close the hand and hold ~0.7s in empty space (not while aiming at UI). This is the scene-capture gesture for **both** the Gemini → Hugging Face API path and the offline eagle fallback. Pinch alone will not spawn scene models.
+- **Fist** — hold a clear fist **out in front of you** ~1.25s (not at your sides, not while aiming at UI). This is the scene-capture gesture for **both** the Gemini → Hugging Face API path and the offline eagle fallback. Pinch alone will not spawn scene models.
 - **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch-and-hold on the open 2D print to pop its 3D model.
 
 ## How to run locally
@@ -32,7 +32,7 @@ npm run dev
 Open the printed HTTPS URL in the **Meta Quest Browser**. Tap **Enter**.
 
 - Pinch Meta Echoes → sofa photo → pinch-hold → `sofa.glb`
-- **Fist** in empty room space (~0.7s) → **Loading…** → `eagle.glb`
+- **Fist** held out in front (~1.25s) → **Loading…** → `eagle.glb`
 
 ### Live Gemini → Hugging Face flow
 
