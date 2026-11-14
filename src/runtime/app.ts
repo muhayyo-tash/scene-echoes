@@ -446,8 +446,9 @@ export class SceneEchoesApp {
   }
 
   private selectFolder(folder: FinderSection): void {
-    if (this.explorer.folder === folder) return;
-    this.explorer.setFolder(folder);
+    const changed = this.explorer.folder !== folder;
+    if (changed) this.explorer.setFolder(folder);
+    // Always click so pinching Movies/Pictures has audible feedback even if already selected.
     this.audio.play('click', {
       x: this.explorer.group.position.x,
       y: this.explorer.group.position.y,
@@ -503,12 +504,13 @@ export class SceneEchoesApp {
       [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
       true,
     );
-    // Prefer cards/icons over the title-bar move strip when the ray grazes both.
+    // Sidebar folders beat cards (thumbnails used to steal Movies taps).
     const ranked = hits.filter((entry) => entry.object.visible && this.uiKind(entry.object));
     const preferred =
+      ranked.find((entry) => this.uiKind(entry.object)?.kind === 'folder') ??
       ranked.find((entry) => {
         const kind = this.uiKind(entry.object)?.kind;
-        return kind === 'card' || kind === 'icon' || kind === 'close' || kind === 'folder' || kind === 'photo';
+        return kind === 'close' || kind === 'icon' || kind === 'card' || kind === 'photo';
       }) ??
       ranked[0] ??
       hits.find((entry) => entry.object.visible);
@@ -530,11 +532,11 @@ export class SceneEchoesApp {
         photoPrint?: boolean;
         finderMove?: boolean;
       };
-      // Prefer interactive targets over the title-bar strip when both are hit.
-      if (data.cardId) return { kind: 'card', cardId: data.cardId };
-      if (data.appIcon) return { kind: 'icon' };
-      if (data.close) return { kind: 'close' };
+      // Folder before card — left sidebar must win over nearby thumbnails.
       if (data.folder) return { kind: 'folder', folder: data.folder };
+      if (data.close) return { kind: 'close' };
+      if (data.appIcon) return { kind: 'icon' };
+      if (data.cardId) return { kind: 'card', cardId: data.cardId };
       if (data.photoPrint) return { kind: 'photo' };
       if (data.finderMove) return { kind: 'move' };
       current = current.parent;
@@ -616,6 +618,11 @@ export class SceneEchoesApp {
       await this.openPhotoCard(id, input);
       return;
     }
+    this.audio.play('click', {
+      x: this.explorer.group.position.x,
+      y: this.explorer.group.position.y,
+      z: this.explorer.group.position.z,
+    });
     this.activeFilmId = id;
     const state = this.films.get(id);
     if (state.status === 'processing') return;

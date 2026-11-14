@@ -15,7 +15,8 @@ export function layoutExplorerCards(
   iconSize = 0.11,
   gap = 0.05,
 ): CardLayout[] {
-  const contentLeft = -panelWidth * 0.18;
+  // Keep thumbnails clear of the left Favorites/Pictures/Movies sidebar.
+  const contentLeft = -panelWidth * 0.02;
   return entries.map((entry, index) => ({
     id: entry.id,
     type: entry.type,

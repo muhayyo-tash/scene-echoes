@@ -113,7 +113,7 @@ export class FileExplorer {
       glow.raycast = () => undefined;
       const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
       const label = new Mesh(
-        new PlaneGeometry(0.22, 0.048),
+        new PlaneGeometry(0.16, 0.032),
         new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
       );
       label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
@@ -451,19 +451,23 @@ export class FileExplorer {
     this.moveHit.position.set(titleCenter.x, titleCenter.y, 0.014);
     this.moveHit.userData.finderMove = true;
     const folders: FinderSection[] = ['favorites', 'pictures', 'movies'];
-    const sideW = Math.floor(CHROME_W * 0.22);
+    // Must match drawFinderWindow sidebar metrics.
+    const sideW = Math.floor(CHROME_W * 0.28);
     const sideTop = 8 + titleH + 10;
-    const rowH = 44;
-    const rowGap = 10;
+    const rowH = 56;
+    const rowGap = 12;
     folders.forEach((id, index) => {
-      const cy = sideTop + 18 + index * (rowH + rowGap) + rowH * 0.5;
+      const cy = sideTop + 20 + index * (rowH + rowGap) + rowH * 0.5;
       const center = chromeToLocal(8 + sideW * 0.5, cy);
       const hit = new Mesh(
-        new PlaneGeometry((sideW / CHROME_W) * FINDER_WIDTH * 0.95, (rowH / CHROME_H) * FINDER_HEIGHT * 1.15),
+        new PlaneGeometry(
+          (sideW / CHROME_W) * FINDER_WIDTH * 1.05,
+          (rowH / CHROME_H) * FINDER_HEIGHT * 1.35,
+        ),
         new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
       );
-      // In front of the drag strip so sidebar selects win the ray.
-      hit.position.set(center.x, center.y, 0.02);
+      // In front of cards/drag so Movies/Pictures/Favorites win the ray.
+      hit.position.set(center.x, center.y, 0.03);
       hit.userData.folder = id;
       this.sidebarHits.push(hit);
       this.group.add(hit);

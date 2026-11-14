@@ -56,9 +56,8 @@ export function makeLabelCanvas(text: string, dark = false): HTMLCanvasElement {
     ctx.fillRect(16, 8, 224, 48);
   }
   ctx.fillStyle = dark ? '#1d1d1f' : '#f2fff6';
-  ctx.font = dark
-    ? '600 36px -apple-system, BlinkMacSystemFont, sans-serif'
-    : '600 40px -apple-system, BlinkMacSystemFont, sans-serif';
+  // File names stay modest — sidebar folder labels are sized in drawFinderWindow.
+  ctx.font = dark ? '22px -apple-system, BlinkMacSystemFont, sans-serif' : '28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 128, 32);
@@ -147,7 +146,7 @@ export function drawFinderWindow(
   ctx.textBaseline = 'middle';
   ctx.fillText(`Meta Echoes · ${titles[selected]}`, w * 0.5, lightsY);
 
-  const sideW = Math.floor(w * 0.22);
+  const sideW = Math.floor(w * 0.28);
   const sideTop = 8 + titleH + 10;
   ctx.fillStyle = '#f4f4f7';
   ctx.fillRect(8, sideTop, sideW, h - 16 - sideTop + 8);
@@ -155,23 +154,23 @@ export function drawFinderWindow(
   ctx.fillRect(8 + sideW, sideTop, 1, h - 16 - sideTop + 8);
 
   const rows: FinderSection[] = ['favorites', 'pictures', 'movies'];
-  const rowH = 44;
-  const rowGap = 10;
+  const rowH = 56;
+  const rowGap = 12;
   ctx.textAlign = 'left';
-  ctx.font = `600 ${Math.max(26, Math.floor(h * 0.045))}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `700 ${Math.max(34, Math.floor(h * 0.058))}px -apple-system, BlinkMacSystemFont, sans-serif`;
   rows.forEach((id, index) => {
-    const y = sideTop + 18 + index * (rowH + rowGap);
+    const y = sideTop + 20 + index * (rowH + rowGap);
     if (id === selected) {
-      roundRect(ctx, 16, y, sideW - 16, rowH, 8);
+      roundRect(ctx, 14, y, sideW - 14, rowH, 10);
       ctx.fillStyle = '#d9e4f5';
       ctx.fill();
     }
     ctx.fillStyle = '#1d1d1f';
-    ctx.fillText(titles[id], 28, y + rowH * 0.55);
+    ctx.fillText(titles[id], 26, y + rowH * 0.55);
   });
 
   ctx.fillStyle = '#8e8e93';
-  ctx.font = `${Math.max(20, Math.floor(h * 0.036))}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `${Math.max(18, Math.floor(h * 0.032))}px -apple-system, BlinkMacSystemFont, sans-serif`;
   ctx.fillText(itemCount === 1 ? '1 item' : `${itemCount} items`, 24, h - 28);
 }
 
