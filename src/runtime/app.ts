@@ -614,11 +614,10 @@ export class SceneEchoesApp {
     }
     this.activeFilmId = id;
     const state = this.films.get(id);
-    if (state.status === 'idle' || state.status === 'failed') {
-      await this.films.start(id);
-      return;
-    }
     if (state.status === 'processing') return;
+    // Always ensure the MP4 is loaded for this id (storage "ready" is not enough).
+    await this.films.start(id);
+    if (this.films.get(id).status !== 'ready') return;
     await this.openMovie(input);
   }
 
@@ -1334,6 +1333,10 @@ export class SceneEchoesApp {
   }
 
   private async openMovie(input: FrameInput): Promise<void> {
+    const filmId = this.activeFilmId ?? this.filmIds()[0];
+    if (!filmId) return;
+    // Bind this film's MP4 even when localStorage already marked it ready.
+    await this.screen.preload(filmId);
     this.space = openMovie(this.space);
     // Same as photo: folder must leave so only the big screen remains.
     this.explorer.setOpen(false, {

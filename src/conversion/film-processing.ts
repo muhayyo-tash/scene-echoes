@@ -28,13 +28,12 @@ export class FilmPreloadProcessing implements FilmProcessing {
   }
 
   async start(filmId: string): Promise<void> {
-    const current = this.ensure(filmId);
-    if (current.status === 'ready') return;
     const existing = this.inflight.get(filmId);
     if (existing) {
       await existing;
       return;
     }
+    // Always run preload so switching films / refresh with stored "ready" still loads the MP4.
     const run = this.run(filmId);
     this.inflight.set(filmId, run);
     try {

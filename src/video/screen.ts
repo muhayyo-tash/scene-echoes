@@ -17,6 +17,7 @@ export class VideoScreen {
   readonly echo = new FilmEcho();
   private glow: Mesh;
   video: HTMLVideoElement | null = null;
+  private filmId: string | null = null;
   private usingFallback = false;
   private clock = 0;
   paused = false;
@@ -46,37 +47,48 @@ export class VideoScreen {
   }
 
   async preload(filmId: string): Promise<void> {
-    if (this.video && this.video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+    if (
+      this.filmId === filmId &&
+      this.video &&
+      this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+    ) {
+      return;
+    }
+    this.clearVideo();
+    this.filmId = filmId;
     const video = document.createElement('video');
     video.playsInline = true;
+    video.setAttribute('playsinline', 'true');
     video.crossOrigin = 'anonymous';
     video.preload = 'auto';
     video.loop = false;
+    video.muted = false;
     video.src = assetUrl(`assets/movie/${filmId}.mp4`);
     video.addEventListener('ended', () => {
       this.ended = true;
       this.paused = true;
       (this.mesh.material as MeshBasicMaterial).opacity = 0.7;
     });
-    await new Promise<void>((resolve, reject) => {
-      const ok = () => {
-        video.removeEventListener('error', bad);
-        resolve();
-      };
-      const bad = () => {
-        video.removeEventListener('canplaythrough', ok);
-        reject(new Error(`Failed to preload ${filmId}.mp4`));
-      };
-      video.addEventListener('canplaythrough', ok, { once: true });
-      video.addEventListener('error', bad, { once: true });
-      video.load();
-    });
+    await waitForVideoReady(video, filmId);
     const texture = new VideoTexture(video);
     texture.colorSpace = SRGBColorSpace;
+    const prev = this.mesh.material as MeshBasicMaterial;
+    prev.map?.dispose();
+    prev.dispose();
     this.mesh.material = new MeshBasicMaterial({ map: texture });
     this.echo.bindTexture(texture);
     this.video = video;
     this.usingFallback = false;
+  }
+
+  private clearVideo(): void {
+    if (this.video) {
+      this.video.pause();
+      this.video.removeAttribute('src');
+      this.video.load();
+      this.video = null;
+    }
+    this.filmId = null;
   }
 
   place(head: { x: number; y: number; z: number }, forward: { x: number; z: number }): void {
@@ -115,8 +127,20 @@ export class VideoScreen {
       this.clock = at;
       return;
     }
-    this.video.currentTime = at;
-    await this.video.play();
+    try {
+      this.video.currentTime = at;
+    } catch {
+      /* Quest may throw if seeking before enough data */
+    }
+    try {
+      await this.video.play();
+    } catch (error) {
+      console.warn('[scene-echoes] video.play failed', error);
+      // Retry muted once — Quest sometimes blocks unmuted autoplay.
+      this.video.muted = true;
+      await this.video.play();
+      this.video.muted = false;
+    }
   }
 
   togglePause(): void {
@@ -174,4 +198,33 @@ export class VideoScreen {
     this.group.visible = false;
     this.echo.setPlaying(false);
   }
+}
+
+function waitForVideoReady(video: HTMLVideoElement, filmId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (ok: boolean, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeEventListener('canplaythrough', onReady);
+      video.removeEventListener('canplay', onReady);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('error', onError);
+      if (ok) resolve();
+      else reject(error ?? new Error(`Failed to preload ${filmId}.mp4`));
+    };
+    const onReady = () => finish(true);
+    const onError = () => finish(false, new Error(`Failed to preload ${filmId}.mp4`));
+    // Large MP4s on Quest may never reach canplaythrough — accept canplay/loadeddata.
+    video.addEventListener('canplaythrough', onReady, { once: true });
+    video.addEventListener('canplay', onReady, { once: true });
+    video.addEventListener('loadeddata', onReady, { once: true });
+    video.addEventListener('error', onError, { once: true });
+    const timer = setTimeout(() => {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) finish(true);
+      else finish(false, new Error(`Timed out preloading ${filmId}.mp4`));
+    }, 45000);
+    video.load();
+  });
 }
