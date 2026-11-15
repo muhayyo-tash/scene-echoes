@@ -28,11 +28,13 @@ export function slotPosition(
   _distance?: number,
 ): { x: number; y: number; z: number } {
   const side = slot.endsWith('right') ? 1 : -1;
-  const low = slot.startsWith('low') ? -0.28 : 0.04;
-  const lateral = config.videoScreenWidth * 0.5 + config.moviePropSideGap;
+  // Same reach distance for every prop; only a small height difference for low slots.
+  const low = slot.startsWith('low') ? -0.18 : 0.02;
+  // Keep props beside the plate but still in the touchable band in front of it.
+  const lateral = config.videoScreenWidth * 0.42 + config.moviePropSideGap;
   const closer = config.moviePropCloser;
   return {
-    // Toward the user from the screen, then out past the left/right edge.
+    // Toward the user from the screen, then slightly left/right — never behind the plate.
     x: screen.x - forward.x * closer + right.x * side * lateral,
     y: screen.y + low,
     z: screen.z - forward.z * closer + right.z * side * lateral,

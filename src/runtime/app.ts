@@ -444,7 +444,7 @@ export class SceneEchoesApp {
     this.audio.play('clickUp');
   }
 
-  /** Hide video / echo / movie props / open photo so only the folder remains. */
+  /** Hide video / echo / movie props / photo / placed eagles so only the folder remains. */
   private dismissStageContent(): void {
     if (this.space.movieOpen || this.screen.group.visible) {
       this.screen.hide();
@@ -455,6 +455,30 @@ export class SceneEchoesApp {
     if (this.space.photoOpen || this.explorer.photoGroup.visible) {
       this.dismissOpenPhoto();
     }
+    // Fist-spawned eagle / sofa / live converts live in `placed`, not the movie scene.
+    this.clearPlacedObjects();
+    if (this.converting || this.pendingConverted || this.sceneCaptureBusy) {
+      this.conversionGen += 1;
+      this.conversion.finish();
+      this.converting = false;
+      this.convertingSince = 0;
+      this.pendingConverted = null;
+      this.sceneCaptureBusy = false;
+      if (this.space.space === 'converting') {
+        this.space.space = this.space.explorerOpen ? 'explorer' : 'clean';
+      }
+    }
+    if (this.grab?.kind === 'object3d' || this.grab?.kind === 'movie') {
+      this.releaseGrab();
+    }
+  }
+
+  private clearPlacedObjects(): void {
+    for (const item of this.placedObjects) {
+      this.placed.remove(item.root);
+    }
+    this.placedObjects = [];
+    this.landingRing.visible = false;
   }
 
   private selectFolder(folder: FinderSection): void {
@@ -1201,15 +1225,20 @@ export class SceneEchoesApp {
         };
         this.audio.play('whoosh', grabbed.root.position);
       } else {
-        const movieObj = this.movie.objects.find((o) => o.root.position.distanceTo(p as never) < 0.4);
+        const movieObj = this.movie.objects.find(
+          (o) => o.phase !== 'out' && o.root.position.distanceTo(p as never) < 0.45,
+        );
         if (movieObj) {
           movieObj.grabbed = true;
-          this.grabOffset.set(
-            movieObj.root.position.x - p.x,
-            movieObj.root.position.y - p.y,
-            movieObj.root.position.z - p.z,
-          );
+          // Stay in the touchable slot — hands only yaw left/right.
+          this.grabOffset.set(0, 0, 0);
           this.grab = { kind: 'movie', id: movieObj.id, hand: activeHand.handedness };
+          this.carrying = movieObj.root;
+          this.grabYaw = {
+            object: movieObj.root.rotation.y,
+            hand: handHorizontalYaw(activeHand, p, movieObj.root.position),
+          };
+          this.audio.play('whoosh', movieObj.root.position);
         } else if (
           this.screen.group.visible &&
           this.screen.group.position.distanceTo(p as never) < 0.6
@@ -1239,16 +1268,25 @@ export class SceneEchoesApp {
     }
     const target = this.grabTarget();
     if (target && this.grab.kind !== 'screen') {
-      target.position.set(
-        pinch.x + this.grabOffset.x,
-        pinch.y + this.grabOffset.y,
-        pinch.z + this.grabOffset.z,
-      );
-      if (this.grab.kind === 'object3d') {
+      if (this.grab.kind === 'movie') {
+        const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
+        if (movieObj) target.position.copy(movieObj.home);
         const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
         target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
         target.rotation.x = 0;
         target.rotation.z = 0;
+      } else {
+        target.position.set(
+          pinch.x + this.grabOffset.x,
+          pinch.y + this.grabOffset.y,
+          pinch.z + this.grabOffset.z,
+        );
+        if (this.grab.kind === 'object3d') {
+          const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
+          target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
+          target.rotation.x = 0;
+          target.rotation.z = 0;
+        }
       }
     }
     if (this.grab.kind === 'screen') {

@@ -244,11 +244,8 @@ export class MovieScene {
       .filter(Boolean) as SlotName[];
     const slot = assignSlot(moment.side, occupied) ?? 'left';
     const root = new Group();
-    // Normalize every film prop to the same hand-reachable size.
-    model.updateWorldMatrix(true, true);
-    const size = new Box3().setFromObject(model).getSize(this.scratch);
-    const longest = Math.max(size.x, size.y, size.z, 1e-4);
-    const baseScale = (config.moviePropSize / longest) * (def.floatScale ?? 1);
+    // Same size + visual center for every GLB (bus pivots used to sit farther than robins).
+    const baseScale = fitMovieProp(model, config.moviePropSize * (def.floatScale ?? 1), this.scratch);
     root.add(model);
     root.add(createContactShadow(config.moviePropSize * 0.45));
     root.scale.setScalar(0.12 * baseScale);
@@ -296,6 +293,22 @@ export class MovieScene {
     }
     this.spawned.delete(id);
   }
+}
+
+/**
+ * Center the mesh on its bounding-box middle and return a uniform scale factor so
+ * the longest axis matches `targetSize`. Works for any GLB — no per-object rules.
+ */
+function fitMovieProp(model: Group, targetSize: number, scratch: Vector3): number {
+  model.updateWorldMatrix(true, true);
+  const box = new Box3().setFromObject(model);
+  const center = box.getCenter(scratch);
+  model.position.x -= center.x;
+  model.position.y -= center.y;
+  model.position.z -= center.z;
+  const size = box.getSize(scratch);
+  const longest = Math.max(size.x, size.y, size.z, 1e-4);
+  return targetSize / longest;
 }
 
 export function outlineMesh(): Mesh {

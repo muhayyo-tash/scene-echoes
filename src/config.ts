@@ -47,9 +47,9 @@ const numericDefaults = {
   videoScreenWidth: 1.7,
   videoScreenDistance: 1.55,
   /** Movie props sit this far closer to the user than the screen (world-fixed). */
-  moviePropCloser: 0.7,
+  moviePropCloser: 0.9,
   /** Extra meters past the screen half-width so props clear the bezel. */
-  moviePropSideGap: 0.14,
+  moviePropSideGap: 0.08,
   /** Let the film play alone this long before any timeline props spawn. */
   movieIntroSeconds: 3.5,
   /** Uniform hand-reachable size for every movie prop (longest axis, meters). */

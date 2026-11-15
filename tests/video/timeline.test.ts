@@ -56,7 +56,7 @@ describe('timeline', () => {
   it('ships per-film timelines (no shared legacy moments)', () => {
     expect(bundledTimeline.films).toBeTruthy();
     expect(Array.isArray(bundledTimeline.films.mountains?.moments)).toBe(true);
-    expect(Array.isArray(bundledTimeline.films.park_winter?.moments)).toBe(true);
+    expect(Array.isArray(bundledTimeline.films.london?.moments)).toBe(true);
     expect(bundledTimeline.moments).toBeUndefined();
   });
 });
