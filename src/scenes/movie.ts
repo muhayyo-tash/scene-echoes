@@ -1,4 +1,4 @@
-import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3 } from 'three';
+import { Box3, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3 } from 'three';
 import type { ManifestObject, SlotName, TimelineMoment } from '../assets/types.js';
 import { loadModel } from '../assets/loaders.js';
 import { config } from '../config.js';
@@ -70,8 +70,10 @@ export class MovieScene {
     onAppear: (id: string, pos: Vector3) => void,
   ): Promise<void> {
     const scheduled = scheduleMoments(moments, time, this.spawned);
+    const introDone = time >= config.movieIntroSeconds;
     for (const item of scheduled) {
-      if (item.stage === 'appear' && !this.spawned.has(item.moment.id)) {
+      // First seconds of a film: watch the video only — no props yet.
+      if (item.stage === 'appear' && !this.spawned.has(item.moment.id) && introDone) {
         await this.spawn(item.moment, screen, head, forward, right, surfaces, onAppear);
       }
       if (item.stage === 'leave' && this.spawned.has(item.moment.id)) {
@@ -242,10 +244,13 @@ export class MovieScene {
       .filter(Boolean) as SlotName[];
     const slot = assignSlot(moment.side, occupied) ?? 'left';
     const root = new Group();
+    // Normalize every film prop to the same hand-reachable size.
+    model.updateWorldMatrix(true, true);
+    const size = new Box3().setFromObject(model).getSize(this.scratch);
+    const longest = Math.max(size.x, size.y, size.z, 1e-4);
+    const baseScale = (config.moviePropSize / longest) * (def.floatScale ?? 1);
     root.add(model);
-    root.add(createContactShadow(0.12));
-    const floatScale = def.floatScale ?? 1;
-    const baseScale = behavior === 'fly' || behavior === 'hover' ? floatScale : 1;
+    root.add(createContactShadow(config.moviePropSize * 0.45));
     root.scale.setScalar(0.12 * baseScale);
     root.renderOrder = 2;
     this.group.add(root);

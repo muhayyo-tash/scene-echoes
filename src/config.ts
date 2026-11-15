@@ -50,6 +50,10 @@ const numericDefaults = {
   moviePropCloser: 0.7,
   /** Extra meters past the screen half-width so props clear the bezel. */
   moviePropSideGap: 0.14,
+  /** Let the film play alone this long before any timeline props spawn. */
+  movieIntroSeconds: 3.5,
+  /** Uniform hand-reachable size for every movie prop (longest axis, meters). */
+  moviePropSize: 0.26,
   momentLeadSeconds: 1,
   /** Smooth pop-out from the screen edge to the side slot. */
   popOutSeconds: 1.35,

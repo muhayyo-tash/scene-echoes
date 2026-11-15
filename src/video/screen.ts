@@ -197,6 +197,17 @@ export class VideoScreen {
   hide(): void {
     this.group.visible = false;
     this.echo.setPlaying(false);
+    this.paused = true;
+    this.ended = false;
+    if (this.video) {
+      this.video.pause();
+      try {
+        this.video.currentTime = 0;
+      } catch {
+        /* ignore seek errors while tearing down */
+      }
+    }
+    this.clock = 0;
   }
 }
 

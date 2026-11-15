@@ -48,6 +48,7 @@ import {
 } from '../core/surfaces.js';
 import {
   closeExplorer,
+  closeMovie,
   closePhoto,
   createSpaceState,
   openExplorer,
@@ -409,6 +410,8 @@ export class SceneEchoesApp {
   }
 
   private openLibrary(input: FrameInput): void {
+    // Opening Finder always clears the room stage (video, props, photo print).
+    this.dismissStageContent();
     this.space = openExplorer(this.space);
     const forward = forwardFrom(input.head.quaternion);
     this.explorer.setOpen(true, {
@@ -430,7 +433,6 @@ export class SceneEchoesApp {
         });
       }
     }
-    if (this.space.movieOpen) this.screen.pauseForExplorer(true);
     if (debugParams.openId) {
       void this.openPhotoCard(debugParams.openId, input);
     }
@@ -440,7 +442,19 @@ export class SceneEchoesApp {
     this.space = closeExplorer(this.space);
     this.explorer.setOpen(false, { x: 0, y: 0, z: 0 }, { x: 0, z: -1 });
     this.audio.play('clickUp');
-    if (this.space.movieOpen) this.screen.pauseForExplorer(false);
+  }
+
+  /** Hide video / echo / movie props / open photo so only the folder remains. */
+  private dismissStageContent(): void {
+    if (this.space.movieOpen || this.screen.group.visible) {
+      this.screen.hide();
+      this.movie.reset();
+      this.activeFilmId = null;
+      this.space = closeMovie(this.space);
+    }
+    if (this.space.photoOpen || this.explorer.photoGroup.visible) {
+      this.dismissOpenPhoto();
+    }
   }
 
   private selectFolder(folder: FinderSection): void {

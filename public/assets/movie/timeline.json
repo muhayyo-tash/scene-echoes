@@ -16,9 +16,9 @@
           "lifetime": 6
         },
         {
-          "id": "fence-6",
+          "id": "robin-6",
           "time": 6,
-          "objectId": "fence",
+          "objectId": "robin",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -42,9 +42,9 @@
           "lifetime": 6
         },
         {
-          "id": "bus-16",
+          "id": "swan-16",
           "time": 16,
-          "objectId": "bus",
+          "objectId": "swan",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -55,9 +55,9 @@
           "lifetime": 6
         },
         {
-          "id": "bus-21",
+          "id": "bridge-21",
           "time": 21,
-          "objectId": "bus",
+          "objectId": "bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -65,6 +65,32 @@
             "height": 0.5
           },
           "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "bus-26",
+          "time": 26,
+          "objectId": "bus",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        },
+        {
+          "id": "bus-31",
+          "time": 31,
+          "objectId": "bus",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
           "lifetime": 6
         }
       ]

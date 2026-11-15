@@ -162,6 +162,16 @@
       "up": "y",
       "behavior": "hover",
       "model": "assets/models/bus.glb"
+    },
+    {
+      "id": "bridge",
+      "scene": "movie",
+      "kind": "object",
+      "label": "bridge",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/bridge.glb"
     }
   ]
 }
