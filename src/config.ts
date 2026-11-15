@@ -12,16 +12,18 @@ const numericDefaults = {
    * Empty-space scene load uses Meta palm/power grab (fist), not pinch.
    * Hold a clear fist this long in front of you — pinch / side hands never commit.
    */
-  sceneFistHoldSeconds: 1.25,
+  sceneFistHoldSeconds: 0.85,
   /** Ignore fists that wander more than this while holding. */
-  sceneFistMoveTolerance: 0.06,
+  sceneFistMoveTolerance: 0.14,
+  /** Brief tracking dropouts may break fist detection; keep the hold alive this long. */
+  sceneFistMissGraceSeconds: 0.28,
   /** Cooldown after a scene/demo load so one fist cannot spawn many eagles. */
-  sceneFistCooldownSeconds: 5,
+  sceneFistCooldownSeconds: 4,
   /** Must fully open the hand this long before another fist can arm. */
-  sceneFistOpenSeconds: 0.45,
+  sceneFistOpenSeconds: 0.35,
   /** Fist must stay roughly this far in front of the headset (meters). */
-  sceneFistMinDistance: 0.28,
-  sceneFistMaxDistance: 0.75,
+  sceneFistMinDistance: 0.2,
+  sceneFistMaxDistance: 0.95,
   pokeDepth: 0.015,
   pokeCooldownMs: 300,
   palmTouchDistance: 0.03,
@@ -44,8 +46,15 @@ const numericDefaults = {
   /** Floating cinema screen — large but not full-FOV. */
   videoScreenWidth: 1.7,
   videoScreenDistance: 1.55,
+  /** Movie props sit this far closer to the user than the screen. */
+  moviePropCloser: 0.35,
+  /** Extra meters past the screen half-width so props clear the bezel. */
+  moviePropSideGap: 0.22,
   momentLeadSeconds: 1,
-  popOutSeconds: 1.2,
+  /** Smooth pop-out from the screen edge to the side slot. */
+  popOutSeconds: 1.35,
+  /** Smooth fade/scale back toward the screen before removal. */
+  movieLeaveSeconds: 1.05,
   maxMovieObjects: 2,
   objectDistanceMin: 0.4,
   objectDistanceMax: 0.7,
@@ -58,7 +67,7 @@ const numericDefaults = {
   rainDropCount: 500,
   perchSearchDistance: 1.5,
   reactionCooldownSeconds: 1,
-  objectLifetimeSeconds: 30,
+  objectLifetimeSeconds: 6,
   masterVolume: 0.35,
   swipeDistance: 0.25,
   swipeSeconds: 0.5,

@@ -338,7 +338,7 @@ async function main() {
     objectId: item.objectId,
     rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
     side: SIDES[index % SIDES.length],
-    lifetime: 30,
+    lifetime: 6,
   }));
 
   writeFilmTimeline(film.id, moments);

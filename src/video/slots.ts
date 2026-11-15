@@ -1,5 +1,7 @@
 import type { SlotName } from '../assets/types.js';
+import { config } from '../config.js';
 
+/** Prefer left/right so props flank the player; low variants sit slightly lower. */
 export const ALL_SLOTS: SlotName[] = ['left', 'right', 'low-left', 'low-right'];
 
 export function assignSlot(
@@ -14,18 +16,42 @@ export function assignSlot(
   return null;
 }
 
+/**
+ * World pose beside the video player: clear of the bezel, a bit closer to the user
+ * than the screen itself.
+ */
 export function slotPosition(
   slot: SlotName,
-  head: { x: number; y: number; z: number },
+  screen: { x: number; y: number; z: number },
   forward: { x: number; z: number },
   right: { x: number; z: number },
-  distance: number,
+  _distance?: number,
 ): { x: number; y: number; z: number } {
   const side = slot.endsWith('right') ? 1 : -1;
-  const low = slot.startsWith('low') ? -0.35 : -0.05;
+  const low = slot.startsWith('low') ? -0.28 : 0.04;
+  const lateral = config.videoScreenWidth * 0.5 + config.moviePropSideGap;
+  const closer = config.moviePropCloser;
   return {
-    x: head.x + forward.x * distance + right.x * side * 0.35,
-    y: head.y + low,
-    z: head.z + forward.z * distance + right.z * side * 0.35,
+    // Toward the user from the screen, then out past the left/right edge.
+    x: screen.x - forward.x * closer + right.x * side * lateral,
+    y: screen.y + low,
+    z: screen.z - forward.z * closer + right.z * side * lateral,
+  };
+}
+
+/** Start of the pop-out: near the matching screen edge, still at screen depth. */
+export function slotAppearFrom(
+  slot: SlotName,
+  screen: { x: number; y: number; z: number },
+  forward: { x: number; z: number },
+  right: { x: number; z: number },
+): { x: number; y: number; z: number } {
+  const side = slot.endsWith('right') ? 1 : -1;
+  const low = slot.startsWith('low') ? -0.2 : 0;
+  const edge = config.videoScreenWidth * 0.42;
+  return {
+    x: screen.x + right.x * side * edge,
+    y: screen.y + low,
+    z: screen.z + right.z * side * edge,
   };
 }

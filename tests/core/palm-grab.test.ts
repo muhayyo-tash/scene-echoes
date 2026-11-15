@@ -38,13 +38,28 @@ describe('palm grab (fist)', () => {
       isPalmGrab({
         palm,
         tips: [
-          { x: 0.05, y: 0.01, z: 0 },
-          { x: 0.048, y: 0, z: 0.01 },
-          { x: 0.052, y: -0.01, z: 0 },
-          { x: 0.06, y: 0, z: -0.01 },
+          { x: 0.09, y: 0.01, z: 0 },
+          { x: 0.088, y: 0, z: 0.01 },
+          { x: 0.092, y: -0.01, z: 0 },
+          { x: 0.1, y: 0, z: -0.01 },
         ],
       }),
     ).toBe(false);
+  });
+
+  it('accepts a Quest-style fist with three curled tips', () => {
+    const palm = { x: 0, y: 0, z: 0 };
+    expect(
+      isPalmGrab({
+        palm,
+        tips: [
+          { x: 0.04, y: 0.01, z: 0 },
+          { x: 0.045, y: 0, z: 0.01 },
+          { x: 0.042, y: -0.01, z: 0 },
+          { x: 0.1, y: 0, z: -0.01 },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it('rejects a pinch-only pose (one tip near palm)', () => {

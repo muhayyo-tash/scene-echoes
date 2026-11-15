@@ -92,6 +92,56 @@
       "up": "y",
       "behavior": "hover",
       "model": "assets/models/mountain.glb"
+    },
+    {
+      "id": "trees",
+      "scene": "movie",
+      "kind": "object",
+      "label": "trees",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/trees.glb"
+    },
+    {
+      "id": "house",
+      "scene": "movie",
+      "kind": "object",
+      "label": "house",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/house.glb"
+    },
+    {
+      "id": "fence",
+      "scene": "movie",
+      "kind": "object",
+      "label": "fence",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/fence.glb"
+    },
+    {
+      "id": "paraglider",
+      "scene": "movie",
+      "kind": "object",
+      "label": "paraglider",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/paraglider.glb"
+    },
+    {
+      "id": "parachute",
+      "scene": "movie",
+      "kind": "object",
+      "label": "parachute",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/parachute.glb"
     }
   ]
 }

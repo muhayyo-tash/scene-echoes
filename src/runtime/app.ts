@@ -178,6 +178,8 @@ export class SceneEchoesApp {
   private sceneFistCooldown = 0;
   private sceneFistArmed = true;
   private sceneFistOpenHold = 0;
+  /** Seconds since the last frame that still looked like an intentional fist. */
+  private sceneFistMiss = 0;
   /** Bumped on timeout/cancel so a late GLB resolve cannot place after failure. */
   private conversionGen = 0;
   private desktopHold: {
@@ -825,21 +827,28 @@ export class SceneEchoesApp {
       this.intentionalSceneFist(this.hands.left, input.head.position, forward) ||
       this.intentionalSceneFist(this.hands.right, input.head.position, forward);
 
-    if (!intentional) {
-      this.sceneFistHold = 0;
-      this.sceneFistOrigin = null;
-      this.sceneFistOpenHold += dt;
-      if (this.sceneFistOpenHold >= config.sceneFistOpenSeconds) {
-        this.sceneFistArmed = true;
-      }
-      // Cancel the “Hold fist…” preview if we never committed a load.
-      if (!this.converting && !this.pendingConverted) {
-        this.conversion.finish();
-      }
-    } else {
+    if (intentional) {
+      this.sceneFistMiss = 0;
       this.sceneFistOpenHold = 0;
+    } else {
+      this.sceneFistMiss += dt;
+      // Only cancel after a short grace — Quest fist tracking flickers a lot.
+      if (this.sceneFistMiss > config.sceneFistMissGraceSeconds) {
+        this.sceneFistHold = 0;
+        this.sceneFistOrigin = null;
+        this.sceneFistOpenHold += dt;
+        if (this.sceneFistOpenHold >= config.sceneFistOpenSeconds) {
+          this.sceneFistArmed = true;
+        }
+        if (!this.converting && !this.pendingConverted) {
+          this.conversion.finish();
+        }
+      }
     }
 
+    const holdingAlive =
+      intentional ||
+      (this.sceneFistHold > 0 && this.sceneFistMiss <= config.sceneFistMissGraceSeconds);
     if (
       this.space.explorerOpen ||
       this.space.movieOpen ||
@@ -848,7 +857,7 @@ export class SceneEchoesApp {
       this.pendingConverted ||
       this.sceneFistCooldown > 0 ||
       !this.sceneFistArmed ||
-      !intentional
+      !holdingAlive
     ) {
       return;
     }
@@ -863,32 +872,30 @@ export class SceneEchoesApp {
       break;
     }
 
-    if (!holding) {
-      this.sceneFistHold = 0;
-      this.sceneFistOrigin = null;
-      return;
+    let pos: Vector3 | null = null;
+    if (holding) {
+      const tip = holding.palm ?? holding.pinchPosition ?? holding.indexTip;
+      if (tip) pos = new Vector3(tip.x, tip.y, tip.z);
+    } else if (this.sceneFistOrigin && this.sceneFistMiss <= config.sceneFistMissGraceSeconds) {
+      // Tracking flicker: keep counting at the last fist position.
+      pos = this.sceneFistOrigin.clone();
     }
-
-    const tip = holding.palm ?? holding.pinchPosition ?? holding.indexTip;
-    if (!tip) {
-      this.sceneFistHold = 0;
-      this.sceneFistOrigin = null;
-      return;
-    }
-    const pos = new Vector3(tip.x, tip.y, tip.z);
+    if (!pos) return;
 
     if (!this.sceneFistOrigin) {
       this.sceneFistOrigin = pos.clone();
       this.sceneFistHold = 0;
-    } else if (pos.distanceTo(this.sceneFistOrigin) > config.sceneFistMoveTolerance) {
+    } else if (holding && pos.distanceTo(this.sceneFistOrigin) > config.sceneFistMoveTolerance) {
+      // Large wander: re-anchor without wiping all progress.
       this.sceneFistOrigin.copy(pos);
-      this.sceneFistHold = 0;
-      if (!this.converting && !this.pendingConverted) this.conversion.finish();
-      return;
+      this.sceneFistHold = Math.max(0, this.sceneFistHold - 0.25);
+      if (this.sceneFistHold < 0.35 && !this.converting && !this.pendingConverted) {
+        this.conversion.finish();
+      }
     }
 
     this.sceneFistHold += dt;
-    if (this.sceneFistHold >= 0.45 && this.sceneFistHold < config.sceneFistHoldSeconds) {
+    if (this.sceneFistHold >= 0.35 && this.sceneFistHold < config.sceneFistHoldSeconds) {
       this.conversion.start(pos, true, 'Hold fist…');
     }
     if (this.sceneFistHold < config.sceneFistHoldSeconds) return;
@@ -897,8 +904,9 @@ export class SceneEchoesApp {
     this.sceneFistOrigin = null;
     this.sceneFistArmed = false;
     this.sceneFistOpenHold = 0;
+    this.sceneFistMiss = 0;
     this.sceneFistCooldown = config.sceneFistCooldownSeconds;
-    holding.longPress.fired = false;
+    if (holding) holding.longPress.fired = false;
     void this.beginSceneCapture(pos);
   }
 
@@ -933,9 +941,9 @@ export class SceneEchoesApp {
     // Must be in front of the face (not at your sides / behind).
     const flat = Math.hypot(dx, dz) || 1e-5;
     const forwardDot = (dx / flat) * forward.x + (dz / flat) * forward.z;
-    if (forwardDot < 0.55) return false;
+    if (forwardDot < 0.3) return false;
     // Roughly chest-to-eye height — dropping hands down should not count.
-    if (dy < -0.35 || dy > 0.12) return false;
+    if (dy < -0.48 || dy > 0.22) return false;
     return true;
   }
 
@@ -1414,10 +1422,12 @@ export class SceneEchoesApp {
     const right = { x: forward.z, z: -forward.x };
     const floor = this.surfaces.surfaces.find((s) => s.horizontal);
     const floorY = floor?.origin.y ?? 0;
+    const screenPos = this.screen.group.position;
     if (!this.screen.paused) {
       void this.movie.tick(
         this.screen.currentTime(),
         this.timeline.moments,
+        screenPos,
         input.head.position,
         forward,
         right,
@@ -1425,7 +1435,16 @@ export class SceneEchoesApp {
         (_id, pos) => this.audio.play('shimmer', pos),
       );
     }
-    this.movie.update(dt, this.time, input.head.position, forward, right, this.surfaces.surfaces, floorY);
+    this.movie.update(
+      dt,
+      this.time,
+      screenPos,
+      input.head.position,
+      forward,
+      right,
+      this.surfaces.surfaces,
+      floorY,
+    );
     const tip = this.hands.left.indexTip ?? this.hands.right.indexTip;
     if (tip) {
       const hit = this.movie.touch(new Vector3(tip.x, tip.y, tip.z));

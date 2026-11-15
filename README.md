@@ -125,10 +125,12 @@ That extracts JPEG frames (at 1s, then every 5s) and asks Gemini for the main ob
 
 Objects go to Hugging Face for a GLB. Room mood comes from the soft video echo around the player, not from Gemini. While a film plays, frames soft-expand past the video bezel as a translucent echo (room still visible through it); the center panel stays the original opaque MP4. Expect **~1.5 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
 
+Each sample time is an appear mark (not a 5s window). Props stay in the scene for **6 seconds**, then ease out.
+
 Writes:
 
 - `public/assets/models/<object>.glb` — reconstructed props
-- `public/assets/movie/timeline.json` — **per film id** object moments (`films.<id>`)
+- `public/assets/movie/timeline.json` — **per film id** object moments (`films.<id>`, `lifetime: 6`)
 - movie entries in `public/assets/manifest.json`
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 

@@ -3,7 +3,7 @@ import type { ManifestObject, SlotName, TimelineMoment } from '../assets/types.j
 import { loadModel } from '../assets/loaders.js';
 import { config } from '../config.js';
 import { behaviorFromLabel, reactionFromBehavior } from '../video/behaviors.js';
-import { assignSlot, slotPosition } from '../video/slots.js';
+import { assignSlot, slotAppearFrom, slotPosition } from '../video/slots.js';
 import { bobOffset, easeInOut, flyPoint, perchTarget, walkPoint } from '../video/paths.js';
 import {
   createReactionState,
@@ -27,6 +27,11 @@ export interface MovieObject {
   grabbed: boolean;
   reaction: ReactionState;
   perch: Vector3 | null;
+  baseScale: number;
+  phase: 'in' | 'live' | 'out';
+  leaveAge: number;
+  home: Vector3;
+  appearFrom: Vector3;
 }
 
 export class MovieScene {
@@ -35,6 +40,7 @@ export class MovieScene {
   rain = new RainEffect();
   private spawned = new Set<string>();
   private activeEffects = new Set<string>();
+  private readonly scratch = new Vector3();
 
   constructor(private catalog: ManifestObject[]) {
     this.group.name = 'movie-objects';
@@ -56,6 +62,7 @@ export class MovieScene {
   async tick(
     time: number,
     moments: TimelineMoment[],
+    screen: { x: number; y: number; z: number },
     head: { x: number; y: number; z: number },
     forward: { x: number; z: number },
     right: { x: number; z: number },
@@ -65,10 +72,10 @@ export class MovieScene {
     const scheduled = scheduleMoments(moments, time, this.spawned);
     for (const item of scheduled) {
       if (item.stage === 'appear' && !this.spawned.has(item.moment.id)) {
-        await this.spawn(item.moment, head, forward, right, surfaces, onAppear);
+        await this.spawn(item.moment, screen, head, forward, right, surfaces, onAppear);
       }
       if (item.stage === 'leave' && this.spawned.has(item.moment.id)) {
-        this.despawn(item.moment.id);
+        this.beginLeave(item.moment.id);
       }
     }
   }
@@ -76,28 +83,50 @@ export class MovieScene {
   update(
     dt: number,
     time: number,
+    screen: { x: number; y: number; z: number },
     head: { x: number; y: number; z: number },
     forward: { x: number; z: number },
     right: { x: number; z: number },
     surfaces: RoomSurface[],
     floorY: number,
   ): void {
-    const occupied = this.objects.map((o) => o.slot).filter(Boolean) as SlotName[];
+    const finishedLeave: string[] = [];
     for (const object of this.objects) {
       if (object.grabbed) continue;
       const def = object.object;
       const behavior = behaviorFromLabel(def.label, def.behavior);
       updateReaction(object.reaction, dt);
       if (behavior === 'rain' || behavior === 'snow') continue;
-      const age = time - object.born;
-      if (age < config.popOutSeconds) {
-        const t = easeInOut(age / config.popOutSeconds);
-        const target = object.slot
-          ? slotPosition(object.slot, head, forward, right, (config.objectDistanceMin + config.objectDistanceMax) / 2)
-          : object.root.position;
-        object.root.position.lerp(new Vector3(target.x, target.y, target.z), t);
+
+      if (object.slot) {
+        const home = slotPosition(object.slot, screen, forward, right);
+        object.home.set(home.x, home.y, home.z);
+        const from = slotAppearFrom(object.slot, screen, forward, right);
+        object.appearFrom.set(from.x, from.y, from.z);
+      }
+
+      if (object.phase === 'in') {
+        const age = time - object.born;
+        const u = easeInOut(age / config.popOutSeconds);
+        object.root.position.copy(object.appearFrom).lerp(object.home, u);
+        object.root.scale.setScalar(object.baseScale * (0.12 + 0.88 * u));
+        if (u >= 1) {
+          object.phase = 'live';
+          object.root.scale.setScalar(object.baseScale);
+        }
         continue;
       }
+
+      if (object.phase === 'out') {
+        object.leaveAge += dt;
+        const u = easeInOut(object.leaveAge / config.movieLeaveSeconds);
+        object.root.position.copy(object.home).lerp(object.appearFrom, u);
+        object.root.scale.setScalar(object.baseScale * Math.max(0.01, 1 - u));
+        if (object.leaveAge >= config.movieLeaveSeconds) finishedLeave.push(object.id);
+        continue;
+      }
+
+      // Live: stay flanking the player (closer than the screen). Soft motion only.
       if (behavior === 'fly') {
         if (def.landing === 'perch' && !object.perch) {
           const found = perchTarget(
@@ -110,26 +139,28 @@ export class MovieScene {
         if (object.perch) {
           object.root.position.lerp(object.perch, dt * 2);
         } else {
-          const p = flyPoint(time, head, (config.objectDistanceMin + config.objectDistanceMax) / 2, config.flySpeed);
+          const p = flyPoint(time, object.home, 0.12, config.flySpeed * 0.65, 0.06);
           object.root.position.set(p.x, p.y, p.z);
           object.root.rotation.y = p.yaw;
         }
       } else if (behavior === 'walk') {
-        const p = walkPoint(time, head, config.walkRadius, config.walkSpeed, floorY);
+        const p = walkPoint(time, object.home, Math.min(0.35, config.walkRadius), config.walkSpeed, floorY);
         object.root.position.set(p.x, p.y, p.z);
         object.root.rotation.y = p.yaw;
         object.root.rotation.x = p.sniff * 0.2;
       } else if (behavior === 'sway') {
+        object.root.position.copy(object.home);
         object.root.rotation.z = Math.sin(time * 1.2) * 0.08;
       } else if (behavior === 'drift') {
         object.root.position.y -= dt * 0.08;
         object.root.rotation.y += dt;
-        if (object.root.position.y < floorY + 0.2) object.root.position.y = head.y;
+        if (object.root.position.y < floorY + 0.2) object.root.position.copy(object.home);
       } else {
-        object.root.position.y += bobOffset(time, config.objectBobAmplitude, config.objectBobSeconds) * dt * 0;
-        object.root.position.y = (object.slot
-          ? slotPosition(object.slot, head, forward, right, (config.objectDistanceMin + config.objectDistanceMax) / 2).y
-          : object.root.position.y) + bobOffset(time, config.objectBobAmplitude, config.objectBobSeconds);
+        object.root.position.set(
+          object.home.x,
+          object.home.y + bobOffset(time, config.objectBobAmplitude, config.objectBobSeconds),
+          object.home.z,
+        );
       }
       if (object.reaction.name === 'hop') {
         object.root.position.y += Math.sin(object.reaction.elapsed * 8) * 0.08;
@@ -137,8 +168,9 @@ export class MovieScene {
       if (object.reaction.name === 'spin') {
         object.root.rotation.y += dt * Math.PI * 2;
       }
-      void occupied;
+      void head;
     }
+    for (const id of finishedLeave) this.despawn(id);
     if (this.rain.points.visible) {
       this.rain.update(dt, floorY);
     }
@@ -146,6 +178,7 @@ export class MovieScene {
 
   touch(point: Vector3): MovieObject | null {
     for (const object of this.objects) {
+      if (object.phase === 'out') continue;
       if (object.root.position.distanceTo(point) < 0.18) {
         const reaction = reactionFromBehavior(
           behaviorFromLabel(object.object.label, object.object.behavior),
@@ -159,8 +192,20 @@ export class MovieScene {
     return null;
   }
 
+  private beginLeave(id: string): void {
+    const object = this.objects.find((item) => item.id === id);
+    if (!object || object.phase === 'out') return;
+    if (this.activeEffects.has(id)) {
+      this.despawn(id);
+      return;
+    }
+    object.phase = 'out';
+    object.leaveAge = 0;
+  }
+
   private async spawn(
     moment: TimelineMoment,
+    screen: { x: number; y: number; z: number },
     head: { x: number; y: number; z: number },
     forward: { x: number; z: number },
     right: { x: number; z: number },
@@ -173,17 +218,17 @@ export class MovieScene {
     if (behavior === 'rain' || behavior === 'snow') {
       this.rain.setKind(behavior === 'snow' ? 'snow' : 'rain');
       this.rain.points.visible = true;
-      this.rain.setCenter(new Vector3(head.x, head.y + 0.6, head.z + forward.z * 0.8));
+      this.rain.setCenter(new Vector3(screen.x, screen.y + 0.6, screen.z));
       this.spawned.add(moment.id);
       this.activeEffects.add(moment.id);
       return;
     }
     const liveObjects = this.objects.filter((o) => {
       const b = behaviorFromLabel(o.object.label, o.object.behavior);
-      return b !== 'rain' && b !== 'snow';
+      return b !== 'rain' && b !== 'snow' && o.phase !== 'out';
     });
     if (liveObjects.length >= config.maxMovieObjects) {
-      this.despawn(liveObjects[0].id);
+      this.beginLeave(liveObjects[0].id);
     }
     let model: Group;
     try {
@@ -191,20 +236,23 @@ export class MovieScene {
     } catch {
       return;
     }
-    const occupied = this.objects.map((o) => o.slot).filter(Boolean) as SlotName[];
-    const slot = behavior === 'walk' ? null : assignSlot(moment.side, occupied);
+    const occupied = this.objects
+      .filter((o) => o.phase !== 'out')
+      .map((o) => o.slot)
+      .filter(Boolean) as SlotName[];
+    const slot = assignSlot(moment.side, occupied) ?? 'left';
     const root = new Group();
     root.add(model);
     root.add(createContactShadow(0.12));
     const floatScale = def.floatScale ?? 1;
-    if (behavior === 'fly' || behavior === 'hover') root.scale.setScalar(floatScale);
+    const baseScale = behavior === 'fly' || behavior === 'hover' ? floatScale : 1;
+    root.scale.setScalar(0.12 * baseScale);
     this.group.add(root);
-    const start = new Vector3(
-      head.x + forward.x * config.videoScreenDistance,
-      head.y,
-      head.z + forward.z * config.videoScreenDistance,
-    );
-    root.position.copy(start);
+    const homePos = slotPosition(slot, screen, forward, right);
+    const fromPos = slotAppearFrom(slot, screen, forward, right);
+    const home = new Vector3(homePos.x, homePos.y, homePos.z);
+    const appearFrom = new Vector3(fromPos.x, fromPos.y, fromPos.z);
+    root.position.copy(appearFrom);
     this.objects.push({
       id: moment.id,
       moment,
@@ -216,10 +264,17 @@ export class MovieScene {
       grabbed: false,
       reaction: createReactionState(),
       perch: null,
+      baseScale,
+      phase: 'in',
+      leaveAge: 0,
+      home,
+      appearFrom,
     });
     this.spawned.add(moment.id);
-    onAppear(moment.id, start);
+    onAppear(moment.id, appearFrom);
     void surfaces;
+    void head;
+    void this.scratch;
   }
 
   private despawn(id: string): void {

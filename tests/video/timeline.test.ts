@@ -55,8 +55,8 @@ describe('timeline', () => {
 
   it('ships per-film timelines (no shared legacy moments)', () => {
     expect(bundledTimeline.films).toBeTruthy();
-    expect(bundledTimeline.films.mountains?.moments ?? []).toEqual([]);
-    expect(bundledTimeline.films.park_winter?.moments ?? []).toEqual([]);
+    expect(Array.isArray(bundledTimeline.films.mountains?.moments)).toBe(true);
+    expect(Array.isArray(bundledTimeline.films.park_winter?.moments)).toBe(true);
     expect(bundledTimeline.moments).toBeUndefined();
   });
 });
@@ -65,6 +65,19 @@ describe('slots and behaviors', () => {
   it('assigns a free slot', () => {
     expect(assignSlot('right', ['right'])).toBe('left');
     expect(assignSlot(undefined, ['left', 'right', 'low-left', 'low-right'])).toBeNull();
+  });
+
+  it('places left/right slots beside the screen and closer to the user', async () => {
+    const { slotPosition } = await import('../../src/video/slots.js');
+    const screen = { x: 0, y: 1.4, z: -1.55 };
+    const forward = { x: 0, z: -1 };
+    const right = { x: 1, z: 0 };
+    const left = slotPosition('left', screen, forward, right);
+    const rightSlot = slotPosition('right', screen, forward, right);
+    expect(left.z).toBeGreaterThan(screen.z); // closer to user (less negative)
+    expect(rightSlot.z).toBeGreaterThan(screen.z);
+    expect(left.x).toBeLessThan(screen.x);
+    expect(rightSlot.x).toBeGreaterThan(screen.x);
   });
 
   it('maps labels to behaviors and default reactions', () => {

@@ -13,7 +13,7 @@
             "height": 0.5
           },
           "side": "right",
-          "lifetime": 30
+          "lifetime": 6
         },
         {
           "id": "mountain-11",
@@ -26,7 +26,7 @@
             "height": 0.5
           },
           "side": "low-left",
-          "lifetime": 30
+          "lifetime": 6
         }
       ]
     },
@@ -43,7 +43,7 @@
             "height": 0.5
           },
           "side": "right",
-          "lifetime": 30
+          "lifetime": 6
         },
         {
           "id": "swan-6",
@@ -56,7 +56,7 @@
             "height": 0.5
           },
           "side": "low-left",
-          "lifetime": 30
+          "lifetime": 6
         },
         {
           "id": "cardinal-11",
@@ -69,7 +69,20 @@
             "height": 0.5
           },
           "side": "left",
-          "lifetime": 30
+          "lifetime": 6
+        },
+        {
+          "id": "trees-16",
+          "time": 16,
+          "objectId": "trees",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 6
         },
         {
           "id": "tree-21",
@@ -81,13 +94,30 @@
             "width": 0.5,
             "height": 0.5
           },
-          "side": "low-right",
-          "lifetime": 30
+          "side": "right",
+          "lifetime": 6
         },
         {
-          "id": "car-26",
+          "id": "fence-26",
           "time": 26,
-          "objectId": "car",
+          "objectId": "fence",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        }
+      ]
+    },
+    "mountains_1": {
+      "moments": [
+        {
+          "id": "mountain-21",
+          "time": 21,
+          "objectId": "mountain",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -95,7 +125,59 @@
             "height": 0.5
           },
           "side": "right",
-          "lifetime": 30
+          "lifetime": 6
+        },
+        {
+          "id": "mountain-26",
+          "time": 26,
+          "objectId": "mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        },
+        {
+          "id": "paraglider-31",
+          "time": 31,
+          "objectId": "paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
+          "lifetime": 6
+        },
+        {
+          "id": "parachute-36",
+          "time": 36,
+          "objectId": "parachute",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 6
+        },
+        {
+          "id": "paraglider-41",
+          "time": 41,
+          "objectId": "paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
         }
       ]
     }
