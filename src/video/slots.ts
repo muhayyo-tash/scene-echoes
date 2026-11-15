@@ -39,7 +39,7 @@ export function slotPosition(
   };
 }
 
-/** Start of the pop-out: near the matching screen edge, still at screen depth. */
+/** Start of the pop-out: near the matching screen edge, already slightly in front. */
 export function slotAppearFrom(
   slot: SlotName,
   screen: { x: number; y: number; z: number },
@@ -48,10 +48,12 @@ export function slotAppearFrom(
 ): { x: number; y: number; z: number } {
   const side = slot.endsWith('right') ? 1 : -1;
   const low = slot.startsWith('low') ? -0.2 : 0;
-  const edge = config.videoScreenWidth * 0.42;
+  const edge = config.videoScreenWidth * 0.38;
+  // Keep the start pose on the user side of the plate so it never pops in behind.
+  const inFront = Math.min(0.2, config.moviePropCloser * 0.35);
   return {
-    x: screen.x + right.x * side * edge,
+    x: screen.x - forward.x * inFront + right.x * side * edge,
     y: screen.y + low,
-    z: screen.z + right.z * side * edge,
+    z: screen.z - forward.z * inFront + right.z * side * edge,
   };
 }

@@ -98,12 +98,8 @@ export class MovieScene {
       updateReaction(object.reaction, dt);
       if (behavior === 'rain' || behavior === 'snow') continue;
 
-      if (object.slot) {
-        const home = slotPosition(object.slot, screen, forward, right);
-        object.home.set(home.x, home.y, home.z);
-        const from = slotAppearFrom(object.slot, screen, forward, right);
-        object.appearFrom.set(from.x, from.y, from.z);
-      }
+      // home / appearFrom are frozen at spawn — never re-bind to head yaw
+      // (that was shoving props behind the screen when you turned).
 
       if (object.phase === 'in') {
         const age = time - object.born;
@@ -126,7 +122,7 @@ export class MovieScene {
         continue;
       }
 
-      // Live: stay flanking the player (closer than the screen). Soft motion only.
+      // Live: world-fixed beside the screen so you can walk around and inspect.
       if (behavior === 'fly') {
         if (def.landing === 'perch' && !object.perch) {
           const found = perchTarget(
@@ -139,12 +135,13 @@ export class MovieScene {
         if (object.perch) {
           object.root.position.lerp(object.perch, dt * 2);
         } else {
-          const p = flyPoint(time, object.home, 0.12, config.flySpeed * 0.65, 0.06);
+          // Tiny local flutter around the frozen slot — not head-locked.
+          const p = flyPoint(time, object.home, 0.06, config.flySpeed * 0.4, 0.04);
           object.root.position.set(p.x, p.y, p.z);
           object.root.rotation.y = p.yaw;
         }
       } else if (behavior === 'walk') {
-        const p = walkPoint(time, object.home, Math.min(0.35, config.walkRadius), config.walkSpeed, floorY);
+        const p = walkPoint(time, object.home, 0.18, config.walkSpeed * 0.7, floorY);
         object.root.position.set(p.x, p.y, p.z);
         object.root.rotation.y = p.yaw;
         object.root.rotation.x = p.sniff * 0.2;
@@ -152,9 +149,9 @@ export class MovieScene {
         object.root.position.copy(object.home);
         object.root.rotation.z = Math.sin(time * 1.2) * 0.08;
       } else if (behavior === 'drift') {
-        object.root.position.y -= dt * 0.08;
-        object.root.rotation.y += dt;
-        if (object.root.position.y < floorY + 0.2) object.root.position.copy(object.home);
+        object.root.position.copy(object.home);
+        object.root.position.y += bobOffset(time, 0.03, 3);
+        object.root.rotation.y += dt * 0.4;
       } else {
         object.root.position.set(
           object.home.x,
@@ -169,6 +166,9 @@ export class MovieScene {
         object.root.rotation.y += dt * Math.PI * 2;
       }
       void head;
+      void screen;
+      void forward;
+      void right;
     }
     for (const id of finishedLeave) this.despawn(id);
     if (this.rain.points.visible) {
@@ -247,7 +247,9 @@ export class MovieScene {
     const floatScale = def.floatScale ?? 1;
     const baseScale = behavior === 'fly' || behavior === 'hover' ? floatScale : 1;
     root.scale.setScalar(0.12 * baseScale);
+    root.renderOrder = 2;
     this.group.add(root);
+    // Freeze world slot from the screen pose at spawn — stays put if you turn.
     const homePos = slotPosition(slot, screen, forward, right);
     const fromPos = slotAppearFrom(slot, screen, forward, right);
     const home = new Vector3(homePos.x, homePos.y, homePos.z);

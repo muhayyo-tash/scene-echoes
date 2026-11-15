@@ -46,10 +46,10 @@ const numericDefaults = {
   /** Floating cinema screen — large but not full-FOV. */
   videoScreenWidth: 1.7,
   videoScreenDistance: 1.55,
-  /** Movie props sit this far closer to the user than the screen. */
-  moviePropCloser: 0.35,
+  /** Movie props sit this far closer to the user than the screen (world-fixed). */
+  moviePropCloser: 0.7,
   /** Extra meters past the screen half-width so props clear the bezel. */
-  moviePropSideGap: 0.22,
+  moviePropSideGap: 0.14,
   momentLeadSeconds: 1,
   /** Smooth pop-out from the screen edge to the side slot. */
   popOutSeconds: 1.35,

@@ -142,6 +142,26 @@
       "up": "y",
       "behavior": "hover",
       "model": "assets/models/parachute.glb"
+    },
+    {
+      "id": "robin",
+      "scene": "movie",
+      "kind": "object",
+      "label": "robin",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/robin.glb"
+    },
+    {
+      "id": "bus",
+      "scene": "movie",
+      "kind": "object",
+      "label": "bus",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/bus.glb"
     }
   ]
 }
