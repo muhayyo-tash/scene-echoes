@@ -54,6 +54,16 @@
       "model": "assets/models/london-boat.glb"
     },
     {
+      "id": "london-big_ben",
+      "scene": "movie",
+      "kind": "object",
+      "label": "big ben",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/london-big_ben.glb"
+    },
+    {
       "id": "london-bridge",
       "scene": "movie",
       "kind": "object",

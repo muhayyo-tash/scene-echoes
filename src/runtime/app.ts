@@ -1215,12 +1215,17 @@ export class SceneEchoesApp {
       );
       if (movieObj) {
         movieObj.grabbed = true;
-        this.grabOffset.set(0, 0, 0);
+        // Follow the pinch so props can be pulled closer / placed in the room.
+        this.grabOffset.set(
+          movieObj.root.position.x - p.x,
+          movieObj.root.position.y - p.y,
+          movieObj.root.position.z - p.z,
+        );
         this.grab = { kind: 'movie', id: movieObj.id, hand: activeHand.handedness };
         this.carrying = movieObj.root;
         this.grabYaw = {
           object: movieObj.root.rotation.y,
-          hand: Math.atan2(p.x - movieObj.home.x, p.z - movieObj.home.z),
+          hand: handHorizontalYaw(activeHand, p, movieObj.root.position),
         };
         this.audio.play('whoosh', movieObj.root.position);
       } else {
@@ -1268,26 +1273,21 @@ export class SceneEchoesApp {
     }
     const target = this.grabTarget();
     if (target && this.grab.kind !== 'screen') {
-      if (this.grab.kind === 'movie') {
-        const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
-        if (movieObj) target.position.copy(movieObj.home);
-        // Orbit yaw from pinch around the prop — more reliable than ray-only on Quest.
-        const handYaw = Math.atan2(pinch.x - target.position.x, pinch.z - target.position.z);
+      target.position.set(
+        pinch.x + this.grabOffset.x,
+        pinch.y + this.grabOffset.y,
+        pinch.z + this.grabOffset.z,
+      );
+      if (this.grab.kind === 'movie' || this.grab.kind === 'object3d') {
+        const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
         target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
         target.rotation.x = 0;
         target.rotation.z = 0;
-      } else {
-        target.position.set(
-          pinch.x + this.grabOffset.x,
-          pinch.y + this.grabOffset.y,
-          pinch.z + this.grabOffset.z,
-        );
-        if (this.grab.kind === 'object3d') {
-          const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
-          target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
-          target.rotation.x = 0;
-          target.rotation.z = 0;
-        }
+      }
+      // Keep movie home in sync so the prop stays where you put it after release.
+      if (this.grab.kind === 'movie') {
+        const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
+        if (movieObj) movieObj.home.copy(target.position);
       }
     }
     if (this.grab.kind === 'screen') {
@@ -1367,7 +1367,10 @@ export class SceneEchoesApp {
     }
     if (this.grab?.kind === 'movie') {
       const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
-      if (movieObj) movieObj.grabbed = false;
+      if (movieObj) {
+        movieObj.home.copy(movieObj.root.position);
+        movieObj.grabbed = false;
+      }
     }
     this.grab = null;
     this.carrying = null;

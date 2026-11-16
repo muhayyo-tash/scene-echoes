@@ -116,10 +116,10 @@ export class FileExplorer {
       const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
       // Label no wider than the icon so grid columns do not overlap.
       const label = new Mesh(
-        new PlaneGeometry(layout.width * 1.15, layout.height * 0.34),
+        new PlaneGeometry(layout.width * 1.25, layout.height * 0.4),
         new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
       );
-      label.position.set(layout.x, layout.y - layout.height * 0.78, 0.013);
+      label.position.set(layout.x, layout.y - layout.height * 0.82, 0.013);
       // Labels must not steal the hand-ray from the card mesh.
       label.raycast = () => undefined;
       this.group.add(glow, mesh, cardHit, label);
@@ -545,7 +545,7 @@ export class FileExplorer {
       card.hit.position.set(layout.x, layout.y, 0.014);
       card.glow.position.set(layout.x, layout.y, 0.008);
       if (card.label) {
-        card.label.position.set(layout.x, layout.y - layout.height * 0.78, 0.013);
+        card.label.position.set(layout.x, layout.y - layout.height * 0.82, 0.013);
       }
     }
   }
@@ -559,7 +559,7 @@ export class FileExplorer {
     card.glow.geometry = new PlaneGeometry(layout.width * 1.12, layout.height * 1.12);
     if (card.label) {
       card.label.geometry.dispose();
-      card.label.geometry = new PlaneGeometry(layout.width * 1.15, layout.height * 0.34);
+      card.label.geometry = new PlaneGeometry(layout.width * 1.25, layout.height * 0.4);
     }
   }
 

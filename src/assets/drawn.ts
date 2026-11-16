@@ -57,7 +57,7 @@ export function makeLabelCanvas(text: string, dark = false): HTMLCanvasElement {
   }
   ctx.fillStyle = dark ? '#1d1d1f' : '#f2fff6';
   // File names stay modest — sidebar folder labels are sized in drawFinderWindow.
-  ctx.font = dark ? '22px -apple-system, BlinkMacSystemFont, sans-serif' : '28px sans-serif';
+  ctx.font = dark ? '28px -apple-system, BlinkMacSystemFont, sans-serif' : '28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 128, 32);

@@ -150,9 +150,9 @@
           "lifetime": 6
         },
         {
-          "id": "london-boat-16",
+          "id": "london-big_ben-16",
           "time": 16,
-          "objectId": "london-boat",
+          "objectId": "london-big_ben",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -163,9 +163,9 @@
           "lifetime": 6
         },
         {
-          "id": "london-boat-21",
+          "id": "london-big_ben-21",
           "time": 21,
-          "objectId": "london-boat",
+          "objectId": "london-big_ben",
           "rect": {
             "x": 0.25,
             "y": 0.25,

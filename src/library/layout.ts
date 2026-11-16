@@ -20,9 +20,9 @@ export function layoutExplorerCards(
   entries: ExplorerEntry[],
   panelWidth: number,
   panelHeight = 0.34,
-  iconSize = 0.078,
-  gapX = 0.036,
-  gapY = 0.055,
+  iconSize = 0.092,
+  gapX = 0.028,
+  gapY = 0.048,
 ): CardLayout[] {
   const count = entries.length;
   if (count === 0) return [];
