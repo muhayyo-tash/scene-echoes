@@ -14,11 +14,13 @@ import {
 import { RainEffect } from '../video/rain.js';
 import { createContactShadow } from '../core/shadows.js';
 import type { RoomSurface } from '../core/surfaces.js';
-import { scheduleMoments } from '../video/timeline.js';
+import { objectIdActiveAt, scheduleMoments } from '../video/timeline.js';
 
 export interface MovieObject {
   id: string;
   moment: TimelineMoment;
+  /** All timeline moment ids absorbed into this continuous prop. */
+  momentIds: Set<string>;
   object: ManifestObject;
   root: Group;
   slot: SlotName | null;
@@ -76,8 +78,13 @@ export class MovieScene {
       if (item.stage === 'appear' && !this.spawned.has(item.moment.id) && introDone) {
         await this.spawn(item.moment, screen, head, forward, right, surfaces, onAppear);
       }
+      // Leave only when no remaining same-objectId moment still covers this time —
+      // consecutive frames of the same prop stay visible instead of blinking.
       if (item.stage === 'leave' && this.spawned.has(item.moment.id)) {
-        this.beginLeave(item.moment.id);
+        if (objectIdActiveAt(moments, item.moment.objectId, time)) continue;
+        const live = this.liveByObjectId(item.moment.objectId);
+        if (live) this.beginLeave(live.id);
+        else this.spawned.delete(item.moment.id);
       }
     }
   }
@@ -205,6 +212,10 @@ export class MovieScene {
     object.leaveAge = 0;
   }
 
+  private liveByObjectId(objectId: string): MovieObject | undefined {
+    return this.objects.find((o) => o.object.id === objectId && o.phase !== 'out');
+  }
+
   private async spawn(
     moment: TimelineMoment,
     screen: { x: number; y: number; z: number },
@@ -225,6 +236,25 @@ export class MovieScene {
       this.activeEffects.add(moment.id);
       return;
     }
+
+    // Same object across consecutive frames: keep the live mesh, don't blink.
+    const existing = this.liveByObjectId(moment.objectId);
+    if (existing) {
+      this.spawned.add(moment.id);
+      existing.momentIds.add(moment.id);
+      existing.moment = moment;
+      existing.lifetime = moment.lifetime ?? config.objectLifetimeSeconds;
+      return;
+    }
+
+    // Different object on this frame: dismiss whatever is currently showing.
+    for (const live of this.objects) {
+      if (live.phase === 'out') continue;
+      const b = behaviorFromLabel(live.object.label, live.object.behavior);
+      if (b === 'rain' || b === 'snow') continue;
+      if (live.object.id !== moment.objectId) this.beginLeave(live.id);
+    }
+
     const liveObjects = this.objects.filter((o) => {
       const b = behaviorFromLabel(o.object.label, o.object.behavior);
       return b !== 'rain' && b !== 'snow' && o.phase !== 'out';
@@ -263,6 +293,7 @@ export class MovieScene {
     this.objects.push({
       id: moment.id,
       moment,
+      momentIds: new Set([moment.id]),
       object: def,
       root,
       slot,
@@ -285,7 +316,9 @@ export class MovieScene {
   private despawn(id: string): void {
     const index = this.objects.findIndex((o) => o.id === id);
     if (index >= 0) {
-      this.group.remove(this.objects[index].root);
+      const leaving = this.objects[index];
+      for (const momentId of leaving.momentIds) this.spawned.delete(momentId);
+      this.group.remove(leaving.root);
       this.objects.splice(index, 1);
     }
     if (this.activeEffects.has(id)) {

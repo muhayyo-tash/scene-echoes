@@ -3,9 +3,9 @@
     "japan": {
       "moments": [
         {
-          "id": "boat-1",
-          "time": 1,
-          "objectId": "boat",
+          "id": "japan-mountain-6",
+          "time": 6,
+          "objectId": "japan-mountain",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -16,9 +16,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-6",
-          "time": 6,
-          "objectId": "boat",
+          "id": "japan-bridge-21",
+          "time": 21,
+          "objectId": "japan-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -29,9 +29,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-11",
-          "time": 11,
-          "objectId": "boat",
+          "id": "japan-bridge-26",
+          "time": 26,
+          "objectId": "japan-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -42,9 +42,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-16",
-          "time": 16,
-          "objectId": "boat",
+          "id": "japan-bridge-31",
+          "time": 31,
+          "objectId": "japan-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -55,9 +55,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-21",
-          "time": 21,
-          "objectId": "boat",
+          "id": "japan-bridge-36",
+          "time": 36,
+          "objectId": "japan-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -68,9 +68,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-26",
-          "time": 26,
-          "objectId": "boat",
+          "id": "japan-train-41",
+          "time": 41,
+          "objectId": "japan-train",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -81,9 +81,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-31",
-          "time": 31,
-          "objectId": "boat",
+          "id": "japan-train-46",
+          "time": 46,
+          "objectId": "japan-train",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -94,9 +94,9 @@
           "lifetime": 6
         },
         {
-          "id": "train-36",
-          "time": 36,
-          "objectId": "train",
+          "id": "japan-train-51",
+          "time": 51,
+          "objectId": "japan-train",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -111,9 +111,9 @@
     "london": {
       "moments": [
         {
-          "id": "ferris-wheel-1",
+          "id": "london-ferris-wheel-1",
           "time": 1,
-          "objectId": "ferris-wheel",
+          "objectId": "london-ferris-wheel",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -124,9 +124,9 @@
           "lifetime": 6
         },
         {
-          "id": "ferris-wheel-6",
+          "id": "london-ferris-wheel-6",
           "time": 6,
-          "objectId": "ferris-wheel",
+          "objectId": "london-ferris-wheel",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -137,9 +137,9 @@
           "lifetime": 6
         },
         {
-          "id": "ferris-wheel-11",
+          "id": "london-ferris-wheel-11",
           "time": 11,
-          "objectId": "ferris-wheel",
+          "objectId": "london-ferris-wheel",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -150,9 +150,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-16",
+          "id": "london-boat-16",
           "time": 16,
-          "objectId": "boat",
+          "objectId": "london-boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -163,9 +163,9 @@
           "lifetime": 6
         },
         {
-          "id": "boat-21",
+          "id": "london-boat-21",
           "time": 21,
-          "objectId": "boat",
+          "objectId": "london-boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -176,9 +176,9 @@
           "lifetime": 6
         },
         {
-          "id": "bridge-31",
+          "id": "london-bridge-31",
           "time": 31,
-          "objectId": "bridge",
+          "objectId": "london-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -189,9 +189,9 @@
           "lifetime": 6
         },
         {
-          "id": "bridge-36",
+          "id": "london-bridge-36",
           "time": 36,
-          "objectId": "bridge",
+          "objectId": "london-bridge",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -202,9 +202,9 @@
           "lifetime": 6
         },
         {
-          "id": "bus-41",
+          "id": "london-bus-41",
           "time": 41,
-          "objectId": "bus",
+          "objectId": "london-bus",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -219,9 +219,9 @@
     "mountains": {
       "moments": [
         {
-          "id": "mountain-1",
-          "time": 1,
-          "objectId": "mountain",
+          "id": "mountains-mountains-6",
+          "time": 6,
+          "objectId": "mountains-mountains",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -232,9 +232,9 @@
           "lifetime": 6
         },
         {
-          "id": "mountain-6",
-          "time": 6,
-          "objectId": "mountain",
+          "id": "mountains-parachute-11",
+          "time": 11,
+          "objectId": "mountains-parachute",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -245,9 +245,9 @@
           "lifetime": 6
         },
         {
-          "id": "paraglider-11",
-          "time": 11,
-          "objectId": "paraglider",
+          "id": "mountains-paraglider-16",
+          "time": 16,
+          "objectId": "mountains-paraglider",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -258,9 +258,95 @@
           "lifetime": 6
         },
         {
-          "id": "paraglider-16",
+          "id": "mountains-parachute-21",
+          "time": 21,
+          "objectId": "mountains-parachute",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 6
+        }
+      ]
+    },
+    "paragliding": {
+      "moments": [
+        {
+          "id": "paragliding-paraglider-1",
+          "time": 1,
+          "objectId": "paragliding-paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "paragliding-paraglider-6",
+          "time": 6,
+          "objectId": "paragliding-paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        }
+      ]
+    },
+    "mountains_1": {
+      "moments": [
+        {
+          "id": "mountains_1-mountain-1",
+          "time": 1,
+          "objectId": "mountains_1-mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "mountains_1-mountain-6",
+          "time": 6,
+          "objectId": "mountains_1-mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        },
+        {
+          "id": "mountains_1-mountain-11",
+          "time": 11,
+          "objectId": "mountains_1-mountain",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
+          "lifetime": 6
+        },
+        {
+          "id": "mountains_1-mountain-16",
           "time": 16,
-          "objectId": "paraglider",
+          "objectId": "mountains_1-mountain",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -271,9 +357,9 @@
           "lifetime": 6
         },
         {
-          "id": "paraglider-21",
+          "id": "mountains_1-mountain-21",
           "time": 21,
-          "objectId": "paraglider",
+          "objectId": "mountains_1-mountain",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -281,36 +367,6 @@
             "height": 0.5
           },
           "side": "right",
-          "lifetime": 6
-        }
-      ]
-    },
-    "paragliding": {
-      "moments": [
-        {
-          "id": "paraglider-1",
-          "time": 1,
-          "objectId": "paraglider",
-          "rect": {
-            "x": 0.25,
-            "y": 0.25,
-            "width": 0.5,
-            "height": 0.5
-          },
-          "side": "right",
-          "lifetime": 6
-        },
-        {
-          "id": "paraglider-6",
-          "time": 6,
-          "objectId": "paraglider",
-          "rect": {
-            "x": 0.25,
-            "y": 0.25,
-            "width": 0.5,
-            "height": 0.5
-          },
-          "side": "low-left",
           "lifetime": 6
         }
       ]

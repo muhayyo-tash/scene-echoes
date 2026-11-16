@@ -85,7 +85,7 @@ export class FileExplorer {
   }
 
   async init(): Promise<void> {
-    this.layouts = layoutExplorerCards(this.entries, FINDER_WIDTH);
+    this.layouts = layoutExplorerCards(this.entries, FINDER_WIDTH, FINDER_HEIGHT);
     for (const layout of this.layouts) {
       const texture = await this.cardTexture(layout);
       const mesh = new Mesh(
@@ -97,7 +97,7 @@ export class FileExplorer {
       // Larger invisible hit plate so Quest hand-rays land on the thumbnail
       // instead of the title-bar / empty chrome behind it.
       const cardHit = new Mesh(
-        new PlaneGeometry(layout.width * 1.45, layout.height * 1.55),
+        new PlaneGeometry(layout.width * 1.35, layout.height * 1.45),
         new MeshBasicMaterial({ visible: false, side: DoubleSide }),
       );
       cardHit.position.set(layout.x, layout.y, 0.014);
@@ -114,11 +114,12 @@ export class FileExplorer {
       glow.position.set(layout.x, layout.y, 0.008);
       glow.raycast = () => undefined;
       const fileName = layout.type === 'video' ? `${layout.id}.mp4` : `${layout.id}.jpg`;
+      // Label no wider than the icon so grid columns do not overlap.
       const label = new Mesh(
-        new PlaneGeometry(0.16, 0.032),
+        new PlaneGeometry(layout.width * 1.15, layout.height * 0.34),
         new MeshBasicMaterial({ map: new CanvasTexture(makeLabelCanvas(fileName, true)), transparent: true }),
       );
-      label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
+      label.position.set(layout.x, layout.y - layout.height * 0.78, 0.013);
       // Labels must not steal the hand-ray from the card mesh.
       label.raycast = () => undefined;
       this.group.add(glow, mesh, cardHit, label);
@@ -522,12 +523,12 @@ export class FileExplorer {
   }
 
   private applyFolder(): void {
-    // Re-pack only the visible folder items so Movies #2 is not stuck at a
-    // global index that sits past the right chrome edge.
+    // Re-pack only the visible folder items into a Finder-style grid.
     const visible = this.cards.filter((card) => this.cardVisible(card));
     const packed = layoutExplorerCards(
       visible.map((card) => ({ id: card.id, type: card.type })),
       FINDER_WIDTH,
+      FINDER_HEIGHT,
     );
     const byId = new Map(packed.map((layout) => [layout.id, layout]));
     for (const card of this.cards) {
@@ -539,12 +540,26 @@ export class FileExplorer {
       const layout = byId.get(card.id);
       if (!layout) continue;
       card.layout = layout;
+      this.resizeCardPlanes(card, layout);
       card.mesh.position.set(layout.x, layout.y, 0.012);
       card.hit.position.set(layout.x, layout.y, 0.014);
       card.glow.position.set(layout.x, layout.y, 0.008);
       if (card.label) {
-        card.label.position.set(layout.x, layout.y - layout.height * 0.72, 0.013);
+        card.label.position.set(layout.x, layout.y - layout.height * 0.78, 0.013);
       }
+    }
+  }
+
+  private resizeCardPlanes(card: ExplorerCard, layout: CardLayout): void {
+    card.mesh.geometry.dispose();
+    card.mesh.geometry = new PlaneGeometry(layout.width, layout.height);
+    card.hit.geometry.dispose();
+    card.hit.geometry = new PlaneGeometry(layout.width * 1.35, layout.height * 1.45);
+    card.glow.geometry.dispose();
+    card.glow.geometry = new PlaneGeometry(layout.width * 1.12, layout.height * 1.12);
+    if (card.label) {
+      card.label.geometry.dispose();
+      card.label.geometry = new PlaneGeometry(layout.width * 1.15, layout.height * 0.34);
     }
   }
 

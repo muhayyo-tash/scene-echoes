@@ -133,9 +133,9 @@ Each sample time is an appear mark (not a 5s window). Props stay in the scene fo
 
 Writes:
 
-- `public/assets/models/<object>.glb` — reconstructed props
-- `public/assets/movie/timeline.json` — **per film id** object moments (`films.<id>`, `lifetime: 6`)
-- movie entries in `public/assets/manifest.json`
+- `public/assets/models/<filmId>-<object>.glb` — film-scoped props (e.g. `london-bridge.glb` vs `japan-bridge.glb`)
+- `public/assets/movie/timeline.json` — **per film id** object moments (`films.<id>`, `objectId` matches the GLB stem, `lifetime: 6`)
+- movie entries in `public/assets/manifest.json` (same film-scoped ids)
 - `public/assets/movie/films.json` — Meta Echoes Movies list
 
 Optional flags: `--every 4` (spacing after the first 1s frame), `--max 6` (max moments), `--skip-hf` (timeline only; you drop GLBs yourself).

@@ -9,6 +9,7 @@ describe('library layout', () => {
         { type: 'video', id: 'park' },
       ],
       0.52,
+      0.34,
     );
     expect(cards).toHaveLength(2);
     const [a, b] = cards;
@@ -23,6 +24,7 @@ describe('library layout', () => {
         { type: 'video', id: 'park_winter' },
       ],
       panelWidth,
+      0.34,
     );
     const half = panelWidth / 2;
     const sidebar = panelWidth * 0.28;
@@ -32,5 +34,44 @@ describe('library layout', () => {
       expect(left).toBeGreaterThan(-half + sidebar - 0.01);
       expect(right).toBeLessThan(half - 0.01);
     }
+  });
+
+  it('grids four movies without overlap and inside the pane', () => {
+    const panelWidth = 0.52;
+    const panelHeight = 0.34;
+    const cards = layoutExplorerCards(
+      [
+        { type: 'video', id: 'japan' },
+        { type: 'video', id: 'london' },
+        { type: 'video', id: 'mountains' },
+        { type: 'video', id: 'paragliding' },
+      ],
+      panelWidth,
+      panelHeight,
+    );
+    expect(cards).toHaveLength(4);
+    const halfW = panelWidth / 2;
+    const halfH = panelHeight / 2;
+    const sidebar = panelWidth * 0.28;
+    for (let i = 0; i < cards.length; i++) {
+      const a = cards[i];
+      expect(a.x - a.width / 2).toBeGreaterThan(-halfW + sidebar - 0.015);
+      expect(a.x + a.width / 2).toBeLessThan(halfW - 0.01);
+      expect(a.y + a.height / 2).toBeLessThan(halfH - 0.02);
+      expect(a.y - a.height / 2).toBeGreaterThan(-halfH + 0.02);
+      for (let j = i + 1; j < cards.length; j++) {
+        const b = cards[j];
+        const dx = Math.abs(a.x - b.x);
+        const dy = Math.abs(a.y - b.y);
+        const separate =
+          dx > (a.width + b.width) / 2 + 0.008 || dy > (a.height + b.height) / 2 + 0.008;
+        expect(separate).toBe(true);
+      }
+    }
+    // 2x2: two distinct rows and columns
+    const xs = new Set(cards.map((c) => c.x.toFixed(4)));
+    const ys = new Set(cards.map((c) => c.y.toFixed(4)));
+    expect(xs.size).toBe(2);
+    expect(ys.size).toBe(2);
   });
 });

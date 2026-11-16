@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { momentsToClearOnSeek, stageForMoment } from '../../src/video/timeline.js';
+import { momentsToClearOnSeek, objectIdActiveAt, stageForMoment } from '../../src/video/timeline.js';
 import { assignSlot } from '../../src/video/slots.js';
 import { behaviorFromLabel, reactionFromBehavior } from '../../src/video/behaviors.js';
 import { perchTarget } from '../../src/video/paths.js';
@@ -24,6 +24,18 @@ describe('timeline', () => {
       { id: 'b', time: 12, objectId: 'y', rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
     ];
     expect(momentsToClearOnSeek(moments, 20, 3).map((m) => m.id)).toEqual(['a', 'b']);
+  });
+
+  it('keeps the same objectId covered across consecutive moments', () => {
+    const moments = [
+      { id: 'bridge-1', time: 1, objectId: 'london-bridge', lifetime: 6, rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
+      { id: 'bridge-6', time: 6, objectId: 'london-bridge', lifetime: 6, rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
+      { id: 'bus-12', time: 12, objectId: 'london-bus', lifetime: 6, rect: { x: 0, y: 0, width: 0.1, height: 0.1 } },
+    ];
+    expect(objectIdActiveAt(moments, 'london-bridge', 7)).toBe(true);
+    expect(objectIdActiveAt(moments, 'london-bridge', 11.5)).toBe(true);
+    expect(objectIdActiveAt(moments, 'london-bridge', 12)).toBe(false);
+    expect(objectIdActiveAt(moments, 'london-bus', 12)).toBe(true);
   });
 
   it('warns when two moments are closer than 6 seconds', () => {

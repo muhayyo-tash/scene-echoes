@@ -4,7 +4,9 @@
  *
  * 1. Samples a frame at 1s, then every N seconds (default 5) from public/assets/movie/<id>.mp4
  * 2. Asks Gemini for the main object per frame
- * 3. Sends object frames to SAM 3D Objects (Hugging Face) and writes the GLB
+ * 3. Sends object frames to SAM 3D Objects (Hugging Face) and writes
+ *    public/assets/models/<filmId>-<object>.glb (film-scoped — london-bridge
+ *    vs japan-bridge never collide on a bare "bridge.glb")
  * 4. Writes public/assets/movie/timeline.json
  * 5. Merges movie objects into public/assets/manifest.json
  * 6. Refreshes films.json
@@ -146,6 +148,11 @@ function slug(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'object';
 }
 
+/** Unique per film so japan + london can each keep their own bridge.glb. */
+function filmObjectId(filmId, label) {
+  return `${filmId}-${slug(label)}`;
+}
+
 function behaviorFor(label) {
   const parts = label.toLowerCase().split(/\s+/);
   for (const part of parts) {
@@ -248,7 +255,7 @@ async function main() {
       console.log(`[prepare-film] ${time}s skip (no object)`);
       continue;
     }
-    const objectId = slug(label);
+    const objectId = filmObjectId(film.id, label);
     const lastSame = [...chosen].reverse().find((item) => item.label === label && item.kind === 'object');
     if (lastSame && time - lastSame.time < every) {
       console.log(`[prepare-film] ${time}s skip duplicate "${label}"`);

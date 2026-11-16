@@ -38,6 +38,20 @@ export function stageForMoment(
   return 'leave';
 }
 
+/** True while any moment with this objectId still covers `time` (same prop stays up). */
+export function objectIdActiveAt(
+  moments: TimelineMoment[],
+  objectId: string,
+  time: number,
+  defaultLifetime = config.objectLifetimeSeconds,
+): boolean {
+  return moments.some((moment) => {
+    if (moment.objectId !== objectId) return false;
+    const life = moment.lifetime ?? defaultLifetime;
+    return time >= moment.time && time < moment.time + life;
+  });
+}
+
 export function momentsToClearOnSeek(
   moments: TimelineMoment[],
   fromTime: number,

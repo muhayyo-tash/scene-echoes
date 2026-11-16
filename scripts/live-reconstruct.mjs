@@ -441,7 +441,8 @@ export async function runFilm(job, input) {
       log(`[conversion] ${job.id} ${time}s → object=${frame.object || 'none'}`);
       const label = frame.object;
       if (!label || SKIP_LABELS.has(label)) continue;
-      const objectId = `live-${slug(label)}`;
+      // Film-scoped id: london-bridge vs japan-bridge (live- prefix keeps temp jobs unique).
+      const objectId = `live-${film.id}-${slug(label)}`;
       const lastSame = [...chosen].reverse().find((item) => item.label === label && item.kind === 'object');
       if (lastSame && time - lastSame.time < FILM_SAMPLE_SECONDS) continue;
       if (!reconstructed.has(objectId) && reconstructs < FILM_MAX_RECONSTRUCTS) {

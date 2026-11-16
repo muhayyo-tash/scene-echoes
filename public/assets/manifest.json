@@ -34,174 +34,124 @@
       }
     },
     {
-      "id": "deer",
-      "scene": "movie",
-      "kind": "object",
-      "label": "deer",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/deer.glb"
-    },
-    {
-      "id": "swan",
-      "scene": "movie",
-      "kind": "object",
-      "label": "swan",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/swan.glb"
-    },
-    {
-      "id": "cardinal",
-      "scene": "movie",
-      "kind": "object",
-      "label": "cardinal",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/cardinal.glb"
-    },
-    {
-      "id": "tree",
-      "scene": "movie",
-      "kind": "object",
-      "label": "tree",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "sway",
-      "model": "assets/models/tree.glb"
-    },
-    {
-      "id": "car",
-      "scene": "movie",
-      "kind": "object",
-      "label": "car",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/car.glb"
-    },
-    {
-      "id": "mountain",
-      "scene": "movie",
-      "kind": "object",
-      "label": "mountain",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/mountain.glb"
-    },
-    {
-      "id": "trees",
-      "scene": "movie",
-      "kind": "object",
-      "label": "trees",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/trees.glb"
-    },
-    {
-      "id": "house",
-      "scene": "movie",
-      "kind": "object",
-      "label": "house",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/house.glb"
-    },
-    {
-      "id": "fence",
-      "scene": "movie",
-      "kind": "object",
-      "label": "fence",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/fence.glb"
-    },
-    {
-      "id": "paraglider",
-      "scene": "movie",
-      "kind": "object",
-      "label": "paraglider",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/paraglider.glb"
-    },
-    {
-      "id": "parachute",
-      "scene": "movie",
-      "kind": "object",
-      "label": "parachute",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/parachute.glb"
-    },
-    {
-      "id": "robin",
-      "scene": "movie",
-      "kind": "object",
-      "label": "robin",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/robin.glb"
-    },
-    {
-      "id": "bus",
-      "scene": "movie",
-      "kind": "object",
-      "label": "bus",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/bus.glb"
-    },
-    {
-      "id": "bridge",
-      "scene": "movie",
-      "kind": "object",
-      "label": "bridge",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/bridge.glb"
-    },
-    {
-      "id": "ferris-wheel",
-      "scene": "movie",
-      "kind": "object",
-      "label": "ferris wheel",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/ferris-wheel.glb"
-    },
-    {
-      "id": "boat",
-      "scene": "movie",
-      "kind": "object",
-      "label": "boat",
-      "realSize": 0.4,
-      "up": "y",
-      "behavior": "hover",
-      "model": "assets/models/boat.glb"
-    },
-    {
-      "id": "train",
+      "id": "japan-train",
       "scene": "movie",
       "kind": "object",
       "label": "train",
       "realSize": 0.4,
       "up": "y",
       "behavior": "hover",
-      "model": "assets/models/train.glb"
+      "model": "assets/models/japan-train.glb"
+    },
+    {
+      "id": "london-boat",
+      "scene": "movie",
+      "kind": "object",
+      "label": "boat",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/london-boat.glb"
+    },
+    {
+      "id": "london-bridge",
+      "scene": "movie",
+      "kind": "object",
+      "label": "bridge",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/london-bridge.glb"
+    },
+    {
+      "id": "london-bus",
+      "scene": "movie",
+      "kind": "object",
+      "label": "bus",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/london-bus.glb"
+    },
+    {
+      "id": "london-ferris-wheel",
+      "scene": "movie",
+      "kind": "object",
+      "label": "ferris wheel",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/london-ferris-wheel.glb"
+    },
+    {
+      "id": "mountains-paraglider",
+      "scene": "movie",
+      "kind": "object",
+      "label": "paraglider",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/mountains-paraglider.glb"
+    },
+    {
+      "id": "paragliding-paraglider",
+      "scene": "movie",
+      "kind": "object",
+      "label": "paraglider",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/paragliding-paraglider.glb"
+    },
+    {
+      "id": "japan-mountain",
+      "scene": "movie",
+      "kind": "object",
+      "label": "mountain",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/japan-mountain.glb"
+    },
+    {
+      "id": "japan-bridge",
+      "scene": "movie",
+      "kind": "object",
+      "label": "bridge",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/japan-bridge.glb"
+    },
+    {
+      "id": "mountains_1-mountain",
+      "scene": "movie",
+      "kind": "object",
+      "label": "mountain",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/mountains_1-mountain.glb"
+    },
+    {
+      "id": "mountains-mountains",
+      "scene": "movie",
+      "kind": "object",
+      "label": "mountains",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/mountains-mountains.glb"
+    },
+    {
+      "id": "mountains-parachute",
+      "scene": "movie",
+      "kind": "object",
+      "label": "parachute",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/mountains-parachute.glb"
     }
   ]
 }
