@@ -1,5 +1,9 @@
 # Scene Echoes
 
+<p align="center">
+  <img src=".github/logo.png" alt="Meta Echoes" width="160" />
+</p>
+
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
 The headset starts as a clean view of your room. Open **Meta Echoes** from the dock, open a photo, or load from empty space using the hand gestures below. An MP4 in Meta Echoes is the movie flow.

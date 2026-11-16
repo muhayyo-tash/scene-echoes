@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <meta http-equiv="Permissions-Policy" content="camera=(self), xr-spatial-tracking=(self)" />
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/brand/meta-echoes-icon-192.png" />
     <title>Scene Echoes</title>
     <style>
       html, body { margin: 0; height: 100%; background: #0e1412; color: #e8f6ec; font-family: Georgia, serif; }
@@ -15,6 +16,10 @@
         background: radial-gradient(circle at 50% 30%, #1d2a24, #0e1412 70%);
       }
       #landing[hidden] { display: none; }
+      #brand-mark {
+        width: min(72vw, 220px); height: auto; border-radius: 28px;
+        background: #fff; padding: 18px 22px; box-sizing: border-box;
+      }
       h1 { font-weight: 400; font-size: 42px; letter-spacing: 0.04em; margin: 0; }
       p { margin: 0; max-width: 28rem; text-align: center; color: #c5d7cb; }
       #enter {
@@ -27,6 +32,7 @@
   <body>
     <div id="scene-container"></div>
     <div id="landing">
+      <img id="brand-mark" src="/assets/brand/meta-echoes-logo.png" alt="Meta Echoes" width="220" height="220" />
       <h1>Scene Echoes</h1>
       <p>Allow headset cameras, then pinch-hold on a real object, or open a photo from Meta Echoes.</p>
       <button id="enter" type="button">Enter</button>

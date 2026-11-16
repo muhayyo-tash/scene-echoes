@@ -147,11 +147,21 @@ export function drawFinderWindow(
     pictures: 'Pictures',
     movies: 'Movies',
   };
+  const title = `Meta Echoes · ${titles[selected]}`;
   ctx.fillStyle = '#1d1d1f';
   ctx.font = `600 ${Math.max(28, Math.floor(h * 0.048))}px -apple-system, BlinkMacSystemFont, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`Meta Echoes · ${titles[selected]}`, w * 0.5, lightsY);
+  const titleWidth = ctx.measureText(title).width;
+  const markR = Math.max(5, Math.floor(h * 0.012));
+  const markGap = markR * 2.35;
+  const markBlock = markR * 2 + markGap * 2;
+  const clusterW = markBlock + 14 + titleWidth;
+  const clusterLeft = w * 0.5 - clusterW / 2;
+  drawEchoesMark(ctx, clusterLeft + markBlock / 2, lightsY, markR);
+  ctx.fillStyle = '#1d1d1f';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, clusterLeft + markBlock + 14, lightsY);
 
   const sideW = Math.floor(w * FINDER_SIDEBAR.ratio);
   const sideTop = 8 + titleH + 10;
@@ -180,26 +190,42 @@ export function drawFinderWindow(
   ctx.fillText(itemCount === 1 ? '1 item' : `${itemCount} items`, 24, h - 28);
 }
 
+/** Three-dot Meta Echoes mark (bright / shade halves) on the current fill. */
+export function drawEchoesMark(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+): void {
+  const bright = '#fec006';
+  const shade = '#dea806';
+  const gap = radius * 2.35;
+  for (let i = -1; i <= 1; i++) {
+    const x = cx + i * gap;
+    ctx.beginPath();
+    ctx.arc(x, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = bright;
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, cy - radius - 1, radius + 1, radius * 2 + 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.arc(x, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = shade;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/** Dock / app icon: white tile + three yellow dots. */
 export function drawFinderAppIcon(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.clearRect(0, 0, w, h);
   roundRect(ctx, w * 0.06, h * 0.06, w * 0.88, h * 0.88, w * 0.22);
-  const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#7ec8ff');
-  g.addColorStop(1, '#2f6bdc');
-  ctx.fillStyle = g;
-  ctx.fill();
   ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.5, h * 0.46, w * 0.28, h * 0.3, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#1a4fa8';
-  ctx.beginPath();
-  ctx.ellipse(w * 0.4, h * 0.42, w * 0.045, h * 0.06, 0, 0, Math.PI * 2);
-  ctx.ellipse(w * 0.6, h * 0.42, w * 0.045, h * 0.06, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.strokeStyle = '#1a4fa8';
-  ctx.lineWidth = Math.max(3, w * 0.03);
-  ctx.arc(w * 0.5, h * 0.5, w * 0.12, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = Math.max(2, w * 0.012);
   ctx.stroke();
+  drawEchoesMark(ctx, w * 0.5, h * 0.5, w * 0.105);
 }
