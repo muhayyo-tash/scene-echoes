@@ -1209,39 +1209,39 @@ export class SceneEchoesApp {
           return;
         }
       }
-      const grabbed = this.placedObjects.find((item) => this.canGrabObject(item, p));
-      if (grabbed) {
-        grabbed.falling = false;
-        this.grabOffset.set(
-          grabbed.root.position.x - p.x,
-          grabbed.root.position.y - p.y,
-          grabbed.root.position.z - p.z,
-        );
-        this.grab = { kind: 'object3d', id: grabbed.id, hand: activeHand.handedness };
-        this.carrying = grabbed.root;
+      // Movie props before the screen — the plate used to steal pinches meant for yaw.
+      const movieObj = this.movie.objects.find(
+        (o) => o.phase !== 'out' && o.root.position.distanceTo(p as never) < 0.55,
+      );
+      if (movieObj) {
+        movieObj.grabbed = true;
+        this.grabOffset.set(0, 0, 0);
+        this.grab = { kind: 'movie', id: movieObj.id, hand: activeHand.handedness };
+        this.carrying = movieObj.root;
         this.grabYaw = {
-          object: grabbed.root.rotation.y,
-          hand: handHorizontalYaw(activeHand, p, grabbed.root.position),
+          object: movieObj.root.rotation.y,
+          hand: Math.atan2(p.x - movieObj.home.x, p.z - movieObj.home.z),
         };
-        this.audio.play('whoosh', grabbed.root.position);
+        this.audio.play('whoosh', movieObj.root.position);
       } else {
-        const movieObj = this.movie.objects.find(
-          (o) => o.phase !== 'out' && o.root.position.distanceTo(p as never) < 0.45,
-        );
-        if (movieObj) {
-          movieObj.grabbed = true;
-          // Stay in the touchable slot — hands only yaw left/right.
-          this.grabOffset.set(0, 0, 0);
-          this.grab = { kind: 'movie', id: movieObj.id, hand: activeHand.handedness };
-          this.carrying = movieObj.root;
+        const grabbed = this.placedObjects.find((item) => this.canGrabObject(item, p));
+        if (grabbed) {
+          grabbed.falling = false;
+          this.grabOffset.set(
+            grabbed.root.position.x - p.x,
+            grabbed.root.position.y - p.y,
+            grabbed.root.position.z - p.z,
+          );
+          this.grab = { kind: 'object3d', id: grabbed.id, hand: activeHand.handedness };
+          this.carrying = grabbed.root;
           this.grabYaw = {
-            object: movieObj.root.rotation.y,
-            hand: handHorizontalYaw(activeHand, p, movieObj.root.position),
+            object: grabbed.root.rotation.y,
+            hand: handHorizontalYaw(activeHand, p, grabbed.root.position),
           };
-          this.audio.play('whoosh', movieObj.root.position);
+          this.audio.play('whoosh', grabbed.root.position);
         } else if (
           this.screen.group.visible &&
-          this.screen.group.position.distanceTo(p as never) < 0.6
+          this.screen.group.position.distanceTo(p as never) < 0.55
         ) {
           this.grabOffset.set(0, 0, 0);
           this.grab = { kind: 'screen', id: 'screen', hand: activeHand.handedness };
@@ -1271,7 +1271,8 @@ export class SceneEchoesApp {
       if (this.grab.kind === 'movie') {
         const movieObj = this.movie.objects.find((o) => o.id === this.grab?.id);
         if (movieObj) target.position.copy(movieObj.home);
-        const handYaw = handHorizontalYaw(activeHand, pinch, target.position);
+        // Orbit yaw from pinch around the prop — more reliable than ray-only on Quest.
+        const handYaw = Math.atan2(pinch.x - target.position.x, pinch.z - target.position.z);
         target.rotation.y = this.grabYaw.object + (handYaw - this.grabYaw.hand);
         target.rotation.x = 0;
         target.rotation.z = 0;

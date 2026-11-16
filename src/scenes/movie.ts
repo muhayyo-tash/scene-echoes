@@ -242,28 +242,31 @@ export class MovieScene {
       .filter((o) => o.phase !== 'out')
       .map((o) => o.slot)
       .filter(Boolean) as SlotName[];
-    const slot = assignSlot(moment.side, occupied) ?? 'left';
+    // Always the user's left — timeline side only reserves a unique id slot.
+    const slot = assignSlot('left', occupied) ?? 'left';
     const root = new Group();
-    // Same size + visual center for every GLB (bus pivots used to sit farther than robins).
-    const baseScale = fitMovieProp(model, config.moviePropSize * (def.floatScale ?? 1), this.scratch);
+    // Same size + visual center for every GLB (no per-object rules).
+    const baseScale = fitMovieProp(model, config.moviePropSize * (def.floatScale ?? 1));
     root.add(model);
     root.add(createContactShadow(config.moviePropSize * 0.45));
     root.scale.setScalar(0.12 * baseScale);
-    root.renderOrder = 2;
+    root.renderOrder = 5;
     this.group.add(root);
-    // Freeze world slot from the screen pose at spawn — stays put if you turn.
-    const homePos = slotPosition(slot, screen, forward, right);
-    const fromPos = slotAppearFrom(slot, screen, forward, right);
+    // Freeze left-of-user pose at spawn — stays put if you turn.
+    const homePos = slotPosition(slot, screen, forward, right, undefined, head);
+    const fromPos = slotAppearFrom(slot, screen, forward, right, head);
     const home = new Vector3(homePos.x, homePos.y, homePos.z);
     const appearFrom = new Vector3(fromPos.x, fromPos.y, fromPos.z);
     root.position.copy(appearFrom);
+    // Born = spawn video time so intro-delayed props still ease in (not snap/hide in the plate).
+    const bornAt = Math.max(moment.time, config.movieIntroSeconds);
     this.objects.push({
       id: moment.id,
       moment,
       object: def,
       root,
       slot,
-      born: moment.time,
+      born: bornAt,
       lifetime: moment.lifetime ?? config.objectLifetimeSeconds,
       grabbed: false,
       reaction: createReactionState(),
@@ -277,8 +280,6 @@ export class MovieScene {
     this.spawned.add(moment.id);
     onAppear(moment.id, appearFrom);
     void surfaces;
-    void head;
-    void this.scratch;
   }
 
   private despawn(id: string): void {
@@ -299,14 +300,16 @@ export class MovieScene {
  * Center the mesh on its bounding-box middle and return a uniform scale factor so
  * the longest axis matches `targetSize`. Works for any GLB — no per-object rules.
  */
-function fitMovieProp(model: Group, targetSize: number, scratch: Vector3): number {
+function fitMovieProp(model: Group, targetSize: number): number {
   model.updateWorldMatrix(true, true);
   const box = new Box3().setFromObject(model);
-  const center = box.getCenter(scratch);
+  const center = new Vector3();
+  const size = new Vector3();
+  box.getCenter(center);
+  box.getSize(size);
   model.position.x -= center.x;
   model.position.y -= center.y;
   model.position.z -= center.z;
-  const size = box.getSize(scratch);
   const longest = Math.max(size.x, size.y, size.z, 1e-4);
   return targetSize / longest;
 }

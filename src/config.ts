@@ -46,14 +46,18 @@ const numericDefaults = {
   /** Floating cinema screen — large but not full-FOV. */
   videoScreenWidth: 1.7,
   videoScreenDistance: 1.55,
-  /** Movie props sit this far closer to the user than the screen (world-fixed). */
+  /** Movie props sit this far closer to the user than the screen (legacy). */
   moviePropCloser: 0.9,
-  /** Extra meters past the screen half-width so props clear the bezel. */
+  /** Extra meters past the screen half-width (legacy). */
   moviePropSideGap: 0.08,
+  /** Meters in front of the head for every movie prop (hand-reachable). */
+  moviePropReach: 0.72,
+  /** Meters to the user's left of forward for every movie prop. */
+  moviePropLeft: 0.34,
   /** Let the film play alone this long before any timeline props spawn. */
   movieIntroSeconds: 3.5,
   /** Uniform hand-reachable size for every movie prop (longest axis, meters). */
-  moviePropSize: 0.26,
+  moviePropSize: 0.32,
   momentLeadSeconds: 1,
   /** Smooth pop-out from the screen edge to the side slot. */
   popOutSeconds: 1.35,

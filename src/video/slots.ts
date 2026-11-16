@@ -1,7 +1,7 @@
 import type { SlotName } from '../assets/types.js';
 import { config } from '../config.js';
 
-/** Prefer left/right so props flank the player; low variants sit slightly lower. */
+/** Kept for timeline side labels; placement always uses the user's left. */
 export const ALL_SLOTS: SlotName[] = ['left', 'right', 'low-left', 'low-right'];
 
 export function assignSlot(
@@ -17,45 +17,44 @@ export function assignSlot(
 }
 
 /**
- * World pose beside the video player: clear of the bezel, a bit closer to the user
- * than the screen itself.
+ * World-fixed pose on the user's left, between the head and the screen.
+ * Same reach for every prop — no per-object rules, timeline `side` ignored for axis.
  */
 export function slotPosition(
-  slot: SlotName,
-  screen: { x: number; y: number; z: number },
+  _slot: SlotName,
+  _screen: { x: number; y: number; z: number },
   forward: { x: number; z: number },
   right: { x: number; z: number },
   _distance?: number,
+  head?: { x: number; y: number; z: number },
 ): { x: number; y: number; z: number } {
-  const side = slot.endsWith('right') ? 1 : -1;
-  // Same reach distance for every prop; only a small height difference for low slots.
-  const low = slot.startsWith('low') ? -0.18 : 0.02;
-  // Keep props beside the plate but still in the touchable band in front of it.
-  const lateral = config.videoScreenWidth * 0.42 + config.moviePropSideGap;
-  const closer = config.moviePropCloser;
+  const origin = head ?? {
+    x: _screen.x - forward.x * config.videoScreenDistance,
+    y: _screen.y,
+    z: _screen.z - forward.z * config.videoScreenDistance,
+  };
+  const reach = config.moviePropReach;
+  const left = config.moviePropLeft;
   return {
-    // Toward the user from the screen, then slightly left/right — never behind the plate.
-    x: screen.x - forward.x * closer + right.x * side * lateral,
-    y: screen.y + low,
-    z: screen.z - forward.z * closer + right.z * side * lateral,
+    x: origin.x + forward.x * reach - right.x * left,
+    y: origin.y - 0.05,
+    z: origin.z + forward.z * reach - right.z * left,
   };
 }
 
-/** Start of the pop-out: near the matching screen edge, already slightly in front. */
+/** Pop-out start: a bit farther toward the screen than home, still clearly in front. */
 export function slotAppearFrom(
   slot: SlotName,
   screen: { x: number; y: number; z: number },
   forward: { x: number; z: number },
   right: { x: number; z: number },
+  head?: { x: number; y: number; z: number },
 ): { x: number; y: number; z: number } {
-  const side = slot.endsWith('right') ? 1 : -1;
-  const low = slot.startsWith('low') ? -0.2 : 0;
-  const edge = config.videoScreenWidth * 0.38;
-  // Keep the start pose on the user side of the plate so it never pops in behind.
-  const inFront = Math.min(0.2, config.moviePropCloser * 0.35);
+  const home = slotPosition(slot, screen, forward, right, undefined, head);
+  const towardScreen = Math.min(0.22, config.moviePropReach * 0.25);
   return {
-    x: screen.x - forward.x * inFront + right.x * side * edge,
-    y: screen.y + low,
-    z: screen.z - forward.z * inFront + right.z * side * edge,
+    x: home.x + forward.x * towardScreen,
+    y: home.y,
+    z: home.z + forward.z * towardScreen,
   };
 }

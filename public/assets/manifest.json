@@ -172,6 +172,36 @@
       "up": "y",
       "behavior": "hover",
       "model": "assets/models/bridge.glb"
+    },
+    {
+      "id": "ferris-wheel",
+      "scene": "movie",
+      "kind": "object",
+      "label": "ferris wheel",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/ferris-wheel.glb"
+    },
+    {
+      "id": "boat",
+      "scene": "movie",
+      "kind": "object",
+      "label": "boat",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/boat.glb"
+    },
+    {
+      "id": "train",
+      "scene": "movie",
+      "kind": "object",
+      "label": "train",
+      "realSize": 0.4,
+      "up": "y",
+      "behavior": "hover",
+      "model": "assets/models/train.glb"
     }
   ]
 }

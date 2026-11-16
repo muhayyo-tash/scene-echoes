@@ -67,17 +67,17 @@ describe('slots and behaviors', () => {
     expect(assignSlot(undefined, ['left', 'right', 'low-left', 'low-right'])).toBeNull();
   });
 
-  it('places left/right slots beside the screen and closer to the user', async () => {
+  it('places every movie prop on the user left at a shared reach', async () => {
     const { slotPosition } = await import('../../src/video/slots.js');
+    const head = { x: 0, y: 1.4, z: 0 };
     const screen = { x: 0, y: 1.4, z: -1.55 };
     const forward = { x: 0, z: -1 };
     const right = { x: 1, z: 0 };
-    const left = slotPosition('left', screen, forward, right);
-    const rightSlot = slotPosition('right', screen, forward, right);
-    expect(left.z).toBeGreaterThan(screen.z); // closer to user (less negative)
-    expect(rightSlot.z).toBeGreaterThan(screen.z);
-    expect(left.x).toBeLessThan(screen.x);
-    expect(rightSlot.x).toBeGreaterThan(screen.x);
+    const a = slotPosition('left', screen, forward, right, undefined, head);
+    const b = slotPosition('right', screen, forward, right, undefined, head);
+    expect(a.x).toBeLessThan(head.x);
+    expect(b.x).toBe(a.x);
+    expect(a.z).toBeCloseTo(-0.72, 1);
   });
 
   it('maps labels to behaviors and default reactions', () => {

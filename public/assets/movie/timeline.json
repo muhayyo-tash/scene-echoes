@@ -1,11 +1,11 @@
 {
   "films": {
-    "london": {
+    "japan": {
       "moments": [
         {
-          "id": "robin-1",
+          "id": "boat-1",
           "time": 1,
-          "objectId": "robin",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -16,9 +16,9 @@
           "lifetime": 6
         },
         {
-          "id": "robin-6",
+          "id": "boat-6",
           "time": 6,
-          "objectId": "robin",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -29,9 +29,9 @@
           "lifetime": 6
         },
         {
-          "id": "swan-11",
+          "id": "boat-11",
           "time": 11,
-          "objectId": "swan",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -42,9 +42,9 @@
           "lifetime": 6
         },
         {
-          "id": "swan-16",
+          "id": "boat-16",
           "time": 16,
-          "objectId": "swan",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -55,9 +55,9 @@
           "lifetime": 6
         },
         {
-          "id": "bridge-21",
+          "id": "boat-21",
           "time": 21,
-          "objectId": "bridge",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -68,9 +68,9 @@
           "lifetime": 6
         },
         {
-          "id": "bus-26",
+          "id": "boat-26",
           "time": 26,
-          "objectId": "bus",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -81,9 +81,9 @@
           "lifetime": 6
         },
         {
-          "id": "bus-31",
+          "id": "boat-31",
           "time": 31,
-          "objectId": "bus",
+          "objectId": "boat",
           "rect": {
             "x": 0.25,
             "y": 0.25,
@@ -91,6 +91,127 @@
             "height": 0.5
           },
           "side": "left",
+          "lifetime": 6
+        },
+        {
+          "id": "train-36",
+          "time": 36,
+          "objectId": "train",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 6
+        }
+      ]
+    },
+    "london": {
+      "moments": [
+        {
+          "id": "ferris-wheel-1",
+          "time": 1,
+          "objectId": "ferris-wheel",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "ferris-wheel-6",
+          "time": 6,
+          "objectId": "ferris-wheel",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        },
+        {
+          "id": "ferris-wheel-11",
+          "time": 11,
+          "objectId": "ferris-wheel",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
+          "lifetime": 6
+        },
+        {
+          "id": "boat-16",
+          "time": 16,
+          "objectId": "boat",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
+          "lifetime": 6
+        },
+        {
+          "id": "boat-21",
+          "time": 21,
+          "objectId": "boat",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "bridge-31",
+          "time": 31,
+          "objectId": "bridge",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
+          "lifetime": 6
+        },
+        {
+          "id": "bridge-36",
+          "time": 36,
+          "objectId": "bridge",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "left",
+          "lifetime": 6
+        },
+        {
+          "id": "bus-41",
+          "time": 41,
+          "objectId": "bus",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-right",
           "lifetime": 6
         }
       ]
@@ -160,6 +281,36 @@
             "height": 0.5
           },
           "side": "right",
+          "lifetime": 6
+        }
+      ]
+    },
+    "paragliding": {
+      "moments": [
+        {
+          "id": "paraglider-1",
+          "time": 1,
+          "objectId": "paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "right",
+          "lifetime": 6
+        },
+        {
+          "id": "paraglider-6",
+          "time": 6,
+          "objectId": "paraglider",
+          "rect": {
+            "x": 0.25,
+            "y": 0.25,
+            "width": 0.5,
+            "height": 0.5
+          },
+          "side": "low-left",
           "lifetime": 6
         }
       ]
