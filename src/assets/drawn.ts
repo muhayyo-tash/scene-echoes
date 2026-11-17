@@ -135,11 +135,29 @@ export function drawFinderWindow(
   ctx.fillRect(8, 8 + 18, w - 16, titleH - 8);
 
   const lightsY = 8 + titleH * 0.55;
-  const colors = ['#ff5f57', '#febc2e', '#28c840'];
+  // Red close is larger + outlined so Quest users can find/hit it.
+  const closeR = 11;
+  ctx.beginPath();
+  ctx.fillStyle = '#ff5f57';
+  ctx.arc(30, lightsY, closeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.moveTo(30 - 5, lightsY - 5);
+  ctx.lineTo(30 + 5, lightsY + 5);
+  ctx.moveTo(30 + 5, lightsY - 5);
+  ctx.lineTo(30 - 5, lightsY + 5);
+  ctx.stroke();
+  const colors = ['#febc2e', '#28c840'];
   colors.forEach((color, i) => {
     ctx.beginPath();
     ctx.fillStyle = color;
-    ctx.arc(28 + i * 22, lightsY, 7, 0, Math.PI * 2);
+    ctx.arc(58 + i * 24, lightsY, 7, 0, Math.PI * 2);
     ctx.fill();
   });
 

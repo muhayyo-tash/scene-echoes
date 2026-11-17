@@ -385,11 +385,15 @@ export class FileExplorer {
     return this.world.distanceTo(point as never) < radius;
   }
 
-  hitClose(point: { x: number; y: number; z: number }, radius = 0.05): boolean {
+  hitClose(point: { x: number; y: number; z: number }, radius = 0.08): boolean {
     if (!this.visible || !this.group.visible) return false;
     this.closeHit.updateWorldMatrix(true, true);
     this.closeHit.getWorldPosition(this.world);
     return this.world.distanceTo(point as never) < radius;
+  }
+
+  closeHitMesh(): Mesh {
+    return this.closeHit;
   }
 
   hitFolder(point: { x: number; y: number; z: number }, _radius = 0.05): FinderSection | null {
@@ -458,17 +462,21 @@ export class FileExplorer {
       new MeshBasicMaterial({ map: this.chromeTexture() }),
     );
     this.panel.userData.finderWindow = true;
+    // Red traffic-light close — large plate in front of chrome/title drag.
+    const titleH = Math.floor(CHROME_H * 0.1);
+    const lightsY = 8 + titleH * 0.55;
+    const closeCenter = chromeToLocal(28, lightsY);
     this.closeHit = new Mesh(
-      new PlaneGeometry(0.028, 0.028),
+      new PlaneGeometry(0.1, 0.1),
       new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
     );
-    this.closeHit.position.set(-FINDER_WIDTH * 0.44, FINDER_HEIGHT * 0.42, 0.01);
+    this.closeHit.position.set(closeCenter.x, closeCenter.y, 0.06);
     this.closeHit.userData.close = true;
-    // Title-bar drag only — keep clear of the left sidebar so Movies is tappable.
-    const titleH = Math.floor(CHROME_H * 0.1);
-    const titleCenter = chromeToLocal(CHROME_W * 0.55, 8 + titleH * 0.55);
+    this.closeHit.renderOrder = 20;
+    // Title-bar drag — keep clear of the traffic lights on the left.
+    const titleCenter = chromeToLocal(CHROME_W * 0.62, 8 + titleH * 0.55);
     this.moveHit = new Mesh(
-      new PlaneGeometry(FINDER_WIDTH * 0.62, FINDER_HEIGHT * 0.1),
+      new PlaneGeometry(FINDER_WIDTH * 0.5, FINDER_HEIGHT * 0.1),
       new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
     );
     this.moveHit.position.set(titleCenter.x, titleCenter.y, 0.014);

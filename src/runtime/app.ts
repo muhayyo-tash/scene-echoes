@@ -540,23 +540,34 @@ export class SceneEchoesApp {
       [this.explorer.iconGroup, this.explorer.group, this.explorer.photoGroup],
       true,
     );
-    // Sidebar folders beat cards (thumbnails used to steal Movies taps).
+    // Close / dock / cards beat folders; folders beat bare chrome.
     const ranked = hits.filter((entry) => entry.object.visible && this.uiKind(entry.object));
     const preferred =
-      ranked.find((entry) => this.uiKind(entry.object)?.kind === 'folder') ??
+      ranked.find((entry) => this.uiKind(entry.object)?.kind === 'close') ??
+      ranked.find((entry) => this.uiKind(entry.object)?.kind === 'icon') ??
       ranked.find((entry) => {
         const kind = this.uiKind(entry.object)?.kind;
-        return kind === 'close' || kind === 'icon' || kind === 'card' || kind === 'photo';
+        return kind === 'card' || kind === 'photo';
       }) ??
+      ranked.find((entry) => this.uiKind(entry.object)?.kind === 'folder') ??
       ranked[0] ??
       hits.find((entry) => entry.object.visible);
     if (!preferred) return null;
+    const preferredKind = this.uiKind(preferred.object)?.kind;
+    // Never remap an aimed close/icon/card hit onto a sidebar folder.
+    if (preferredKind === 'close' || preferredKind === 'icon' || preferredKind === 'card' || preferredKind === 'photo') {
+      return { object: preferred.object, point: preferred.point };
+    }
     // Resolve Pictures vs Movies with local AABB so overlapping rays cannot
-    // latch onto the wrong sidebar row (Favorites used to steal Movies).
+    // latch onto the wrong sidebar row.
     const folder = this.explorer.hitFolder(preferred.point, 0.12);
     if (folder) {
       const folderMesh = this.explorer.folderHitMesh(folder);
       if (folderMesh) return { object: folderMesh, point: preferred.point };
+    }
+    // Tip/ray near the red light but missing the mesh — still close.
+    if (this.space.explorerOpen && this.explorer.hitClose(preferred.point, 0.09)) {
+      return { object: this.explorer.closeHitMesh(), point: preferred.point };
     }
     return { object: preferred.object, point: preferred.point };
   }
@@ -605,15 +616,31 @@ export class SceneEchoesApp {
     // Inside Meta Echoes: Meta select OR tip-pinch while the ray is on a target
     // (ray aim keeps tip from opening random cards). Dock icon stays select-only.
     for (const hand of [this.hands.left, this.hands.right]) {
-      const target = this.uiKind(this.uiPick(hand)?.object ?? null);
+      let target = this.uiKind(this.uiPick(hand)?.object ?? null);
+      // Pinch near the red light even if the ray skimmed the title bar.
+      if (
+        !target &&
+        this.space.explorerOpen &&
+        !this.space.photoOpen &&
+        hand.pinchPosition &&
+        this.explorer.hitClose(hand.pinchPosition, 0.1)
+      ) {
+        target = { kind: 'close' };
+      }
       if (target?.kind === 'card' && target.cardId) hover = target.cardId;
       const commitUi =
         hand.justSelected ||
         (hand.justPinched && target !== null && target.kind !== 'icon' && target.kind !== 'move');
       if (!commitUi || !target || target.kind === 'move') continue;
-      if (target.kind === 'icon' && !this.space.explorerOpen && !this.space.photoOpen) {
-        if (!hand.justSelected) continue;
-        this.openLibrary(input);
+      if (target.kind === 'icon' && !this.space.photoOpen) {
+        // Open needs Meta select; close also accepts pinch on the dock.
+        if (!this.space.explorerOpen && !hand.justSelected) continue;
+        if (this.space.explorerOpen) {
+          if (this.grab?.kind === 'explorer') this.releaseGrab();
+          this.closeLibrary();
+        } else {
+          this.openLibrary(input);
+        }
         return;
       }
       if (target.kind === 'close' && this.space.explorerOpen && !this.space.photoOpen) {
@@ -1581,7 +1608,8 @@ export class SceneEchoesApp {
     const moved = Math.hypot(event.clientX - hold.x, event.clientY - hold.y);
     if (moved > 8) return;
     if (hold.kind === 'icon') {
-      this.openLibrary(this.desktopFrame(camera));
+      if (this.space.explorerOpen) this.closeLibrary();
+      else this.openLibrary(this.desktopFrame(camera));
       return;
     }
     if (hold.kind === 'close') {
@@ -1671,7 +1699,7 @@ export class SceneEchoesApp {
       }
     }
     const iconHit = hits.find((hit) => hit.object.userData.appIcon);
-    if (iconHit && !this.space.explorerOpen && !this.space.photoOpen) {
+    if (iconHit && !this.space.photoOpen) {
       return { kind: 'icon', point, uv: null, onScreen: false };
     }
     if (this.space.explorerOpen && point) {
