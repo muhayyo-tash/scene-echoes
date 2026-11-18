@@ -79,20 +79,10 @@ class SceneEchoesSystem extends createSystem({
 
 void (async () => {
   const missing = await checkSupport();
-  if (missing) {
-    // Desktop "preview" is incomplete (no reliable hands/movies). Keep the
-    // landing so the URL loads for judges, but do not launch a fake session.
-    if (support) {
-      support.textContent =
-        'Open this link in Meta Quest Browser for the full hands and passthrough experience. Laptop browsers cannot run this app.';
-      support.hidden = false;
-    }
-    if (enter instanceof HTMLButtonElement) {
-      enter.disabled = true;
-      enter.textContent = 'Quest only';
-      enter.style.opacity = '0.45';
-      enter.style.cursor = 'not-allowed';
-    }
+  if (missing && support) {
+    support.textContent =
+      'Please launch in a Meta Quest headset for a reliable experience. Laptop browsers were not tested; Enter is only a limited preview.';
+    support.hidden = false;
   }
 
   const world = await World.create(container, {
@@ -147,7 +137,6 @@ void (async () => {
   world.registerSystem(SceneEchoesSystem);
 
   enter?.addEventListener('click', async () => {
-    if (missing) return;
     try {
       const { ensureMeshoptDecoder } = await import('./assets/loaders.js');
       await ensureMeshoptDecoder();
@@ -157,7 +146,7 @@ void (async () => {
     try {
       await app.startAudio();
     } catch {
-      /* audio is optional until XR starts */
+      /* audio is optional in the desktop preview */
     }
     try {
       await app.prepareCamera();
@@ -165,17 +154,15 @@ void (async () => {
       /* headset camera is optional until live empty-space capture */
     }
     landing?.setAttribute('hidden', '');
+    if (missing) {
+      app.enableDesktopPreview(world.camera, world.renderer.domElement);
+      return;
+    }
     try {
       await Promise.resolve(world.launchXR({ sessionMode: SessionMode.ImmersiveAR }));
       void app.prepareCamera();
-    } catch (error) {
-      console.warn('[scene-echoes] XR launch failed', error);
-      landing?.removeAttribute('hidden');
-      if (support) {
-        support.textContent =
-          'Could not start immersive AR. Open this page in Meta Quest Browser and try again.';
-        support.hidden = false;
-      }
+    } catch {
+      app.enableDesktopPreview(world.camera, world.renderer.domElement);
     }
   });
 })();
