@@ -4,23 +4,23 @@
   <img src=".github/logo.png" alt="Meta Echoes" width="160" />
 </p>
 
-A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
+A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Photos and films leave the screen and show up in your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Open **Meta Echoes** from the dock, open a photo, or (with local API keys) load from empty space using the hand gestures below. An MP4 in Meta Echoes is the movie flow.
+The headset starts as a clean view of your room. Open **Meta Echoes** from the dock for Pictures and Movies. With local API keys, you can also hold a fist toward empty space to load what you are looking at.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
 
 ## Hand gestures
 
-Aligned with [Meta’s hands interaction types](https://developers.meta.com/horizon/design/hands-interaction-types/) (pinch for UI/select, palm grab for heavier actions):
+Aligned with [Meta’s hands interaction types](https://developers.meta.com/horizon/design/hands-interaction-types/) (pinch to select, palm grab for heavier actions):
 
 | Gesture | What it does |
 | --- | --- |
-| **Fist** | Empty-space scene load (local live API only; no offline demo) |
-| **Pinch** | Meta Echoes UI + open photo + 2D→3D pop |
+| **Pinch** | Meta Echoes UI, open a photo or film, pinch and hold on a photo to bring its subject into the room |
+| **Fist** | Empty-space scene load (local live API only) |
 
-- **Fist** — hold a clear fist **out in front of you** ~1s (not at your sides, not while aiming at UI). Runs only with local live conversion (`.env` keys). On GitHub Pages / no keys, fist does nothing. Pinch alone will not spawn scene models.
-- **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch and hold on the open 2D print to pop its 3D model.
+- **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo or film, then pinch and hold on an open photo to load its 3D model. Grab film objects to move them.
+- **Fist** — hold a clear fist out in front of you for about 1 second (not at your sides, not while aiming at UI). Runs only with local live conversion (`.env` keys via `npm run dev`). On GitHub Pages, or without keys, fist does nothing. There is no offline stand-in model.
 
 ## How to run locally
 
@@ -36,6 +36,7 @@ npm run dev
 Open the printed HTTPS URL in the **Meta Quest Browser**. Tap **Enter**.
 
 - Pinch Meta Echoes → sofa photo → pinch and hold → `sofa.glb`
+- Open Movies for the bundled films (soft echo past the screen + grabable props)
 - Empty-space fist is inactive without live API keys
 
 ### Live Gemini → Hugging Face flow
@@ -58,8 +59,8 @@ npm run dev
 
 3. On Quest (same LAN), open the printed HTTPS URL, enter XR, then:
 
-- **Meta Echoes photo pinch** → Gemini names the marked object → SAM 3D Objects (Hugging Face) rebuilds a GLB → object appears in the room. If the API fails, the bundled model for that photo is used when allowed.
-- **Empty-space fist** → headset still → same Gemini → HF pipeline. On failure, the load cancels (no bundled stand-in).
+- **Photo:** pinch and hold on the open print → Gemini names the marked object → SAM 3D Objects (Hugging Face) rebuilds a GLB → object appears in the room. If the API fails, the bundled model for that photo is used when allowed.
+- **Empty space:** hold a fist out in front → same Gemini → HF pipeline. On failure, the load cancels (no bundled stand-in).
 
 `docs/CONVERSION_API.md` describes the JSON contract. Standalone server (optional): `npm run conversion-server`.
 
@@ -71,12 +72,13 @@ Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object
 
 | Path | Role |
 | --- | --- |
-| `public/assets/photos/` | 2D images for Meta Echoes cards |
-| `public/assets/models/` | Matching GLBs |
+| `public/assets/photos/` | 2D images for Meta Echoes Pictures |
+| `public/assets/models/` | Matching GLBs (photos + film-scoped props) |
+| `public/assets/movie/` | MP4s, `films.json`, `timeline.json` |
 | `public/assets/manifest.json` | Registers every object the runtime can load |
-| `public/assets/explorer.json` | Subset listed in the Meta Echoes UI |
+| `public/assets/explorer.json` | Photos listed in Meta Echoes |
 
-**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission.
+**Competition default:** Meta Echoes Pictures lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. Movies come from `films.json` and the preprocessed timeline.
 
 ## Adding a photo to Meta Echoes
 
@@ -108,11 +110,11 @@ Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object
 ]
 ```
 
-Restart `npm run dev`. The new card appears in Meta Echoes; pinch-hold on the open print loads that GLB.
+Restart `npm run dev`. The new card appears in Meta Echoes; pinch and hold on the open print loads that GLB.
 
 ## Adding a film (offline demo timeline)
 
-Competition / Pages ships a **preprocessed** film (timeline + GLBs already in the repo), so Quest playback does not wait on APIs. Use this script only when you want to bake your own MP4.
+Competition / Pages ships **preprocessed** films (timeline + GLBs already in the repo), so Quest playback does not wait on APIs. Use this script only when you want to bake your own MP4.
 
 1. Drop an MP4 in `public/assets/movie/` (e.g. `park.mp4`).
 2. With `GEMINI_API_KEY` + `HF_TOKEN` in `.env` and `ffmpeg` installed:
@@ -127,9 +129,9 @@ That extracts JPEG frames (at 1s, then every 5s) and asks Gemini for the main ob
 
 `object: deer`
 
-Objects go to Hugging Face for a GLB. Room mood comes from the soft video echo around the player, not from Gemini. While a film plays, frames soft-expand past the video bezel as a translucent echo (room still visible through it); the center panel stays the original opaque MP4. Expect **~1.5 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
+Objects go to Hugging Face for a GLB. Room mood comes from the soft video echo around the player, not from Gemini. While a film plays, the picture softens and expands past the frame as a translucent echo (room still visible through it); the center panel stays the original opaque MP4. Expect **~1–2 minutes per object** on HF. The HF API also has a daily usage limit, so long or multi-object runs can stop mid-way.
 
-Each sample time is an appear mark (not a 5s window). Props stay in the scene for **6 seconds**, then ease out. The first **~3.5s** of playback stay prop-free so you can see the film; all props use one small hand-reachable size.
+Each sample time is an appear mark (not a 5s window). Props stay in the scene for **6 seconds**, then ease out. The first **~3.5s** of playback stay prop-free so you can see the film; all props use one small hand-reachable size. The same `objectId` across consecutive samples keeps one continuous mesh.
 
 Writes:
 
