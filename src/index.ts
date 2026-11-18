@@ -79,11 +79,7 @@ class SceneEchoesSystem extends createSystem({
 
 void (async () => {
   const missing = await checkSupport();
-  if (missing && support) {
-    support.textContent =
-      'Please launch in a Meta Quest headset for a reliable experience. Laptop browsers were not tested; Enter is only a limited preview.';
-    support.hidden = false;
-  }
+  // Headset note stays on the landing HTML once; do not duplicate it in #support.
 
   const world = await World.create(container, {
     ...projectOptions,
