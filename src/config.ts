@@ -17,7 +17,7 @@ const numericDefaults = {
   sceneFistMoveTolerance: 0.1,
   /** Brief tracking dropouts may break fist detection; keep the hold alive this long. */
   sceneFistMissGraceSeconds: 0.2,
-  /** Cooldown after a scene/demo load so one fist cannot spawn many eagles. */
+  /** Cooldown after a scene load so one fist cannot spawn many objects. */
   sceneFistCooldownSeconds: 4.5,
   /** Must fully open the hand this long before another fist can arm. */
   sceneFistOpenSeconds: 0.4,

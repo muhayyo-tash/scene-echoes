@@ -73,6 +73,7 @@ import type { FinderSection } from '../assets/drawn.js';
 import {
   createModelSource,
   createFilmProcessing,
+  isLiveConversionAvailable,
   isManifestDefault,
   type LiveFilmResult,
 } from '../conversion/source.js';
@@ -444,7 +445,7 @@ export class SceneEchoesApp {
     this.audio.play('clickUp');
   }
 
-  /** Hide video / echo / movie props / photo / placed eagles so only the folder remains. */
+  /** Hide video / echo / movie props / photo / placed objects so only the folder remains. */
   private dismissStageContent(): void {
     if (this.space.movieOpen || this.screen.group.visible) {
       this.screen.hide();
@@ -455,7 +456,7 @@ export class SceneEchoesApp {
     if (this.space.photoOpen || this.explorer.photoGroup.visible) {
       this.dismissOpenPhoto();
     }
-    // Fist-spawned eagle / sofa / live converts live in `placed`, not the movie scene.
+    // Fist-spawned / sofa / live converts live in `placed`, not the movie scene.
     this.clearPlacedObjects();
     if (this.converting || this.pendingConverted || this.sceneCaptureBusy) {
       this.conversionGen += 1;
@@ -789,7 +790,7 @@ export class SceneEchoesApp {
           this.conversion.setMessage(`Loading… ${secs}s`);
         }
       }
-      // Live Gemini→HF can take minutes; bundled eagle/sofa should finish in seconds.
+      // Live Gemini→HF can take minutes; bundled sofa should finish in seconds.
       const timeoutSeconds = isManifestDefault() ? 20 : config.conversionTimeoutSeconds;
       if (!this.pendingConverted && this.convertingSince > timeoutSeconds) {
         console.warn('[scene-echoes] conversion timed out');
@@ -884,9 +885,14 @@ export class SceneEchoesApp {
    * Meta keeps pinch for UI select; palm grab is the “heavier” gesture
    * (https://developers.meta.com/horizon/design/hands-interaction-types/).
    * Requires a clear fist held steadily in front of the headset — hands at
-   * your sides or slight motion should not spawn the eagle.
+   * your sides or slight motion should not start a load. Needs live API mode.
    */
   private updateSceneHold(dt: number, input: FrameInput): void {
+    if (!isLiveConversionAvailable()) {
+      this.sceneFistHold = 0;
+      this.sceneFistOrigin = null;
+      return;
+    }
     const forward = forwardFrom(input.head.quaternion);
     const intentional =
       this.intentionalSceneFist(this.hands.left, input.head.position, forward) ||
@@ -1039,44 +1045,30 @@ export class SceneEchoesApp {
   }
 
   /**
-   * Pinch in empty room space:
-   * - local + API keys → Gemini → Hugging Face (live still)
-   * - GitHub Pages / no keys → bundled eagle.glb demo stand-in
+   * Empty-space fist: local live mode only (Gemini → Hugging Face).
+   * No bundled demo fallback — Pages / no keys does nothing.
    */
   private async beginSceneCapture(origin: Vector3): Promise<void> {
     if (this.converting || this.sceneCaptureBusy) return;
+    if (!isLiveConversionAvailable()) return;
     this.sceneCaptureBusy = true;
     this.converting = true;
     this.space.space = 'converting';
     this.conversion.start(origin, true, 'Loading…');
     this.audio.play('whoosh', origin);
     try {
-      if (!isManifestDefault()) {
-        try {
-          const still = await this.sceneCapture.captureStill();
-          if (!still.ok) {
-            throw new Error(`${still.reason}: ${still.detail}`);
-          }
-          console.info('[scene-echoes] scene still', still.label);
-          this.conversion.setMessage('Loading 3D model…');
-          await this.beginConversion(`scene-${Date.now()}`, origin, true, {
-            x: 0.5,
-            y: 0.5,
-            image: still.dataUrl,
-            allowFallback: false,
-          });
-          return;
-        } catch (error) {
-          console.warn(
-            '[scene-echoes] live scene conversion failed, falling back to eagle.glb',
-            error,
-          );
-          this.conversion.start(origin, true, 'Loading…');
-        }
+      const still = await this.sceneCapture.captureStill();
+      if (!still.ok) {
+        throw new Error(`${still.reason}: ${still.detail}`);
       }
-      // Competition / offline demo: pre-baked eagle for empty-space pinch.
-      this.conversion.setMessage('Loading…');
-      await this.beginConversion('eagle', origin, true);
+      console.info('[scene-echoes] scene still', still.label);
+      this.conversion.setMessage('Loading 3D model…');
+      await this.beginConversion(`scene-${Date.now()}`, origin, true, {
+        x: 0.5,
+        y: 0.5,
+        image: still.dataUrl,
+        allowFallback: false,
+      });
     } catch (error) {
       console.warn('[scene-echoes] scene capture failed', error);
       this.conversion.finish();
@@ -1643,6 +1635,7 @@ export class SceneEchoesApp {
     }
     if (
       hold.kind === 'other' &&
+      isLiveConversionAvailable() &&
       !this.space.explorerOpen &&
       !this.space.photoOpen &&
       !this.space.movieOpen

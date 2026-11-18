@@ -18,22 +18,6 @@
       }
     },
     {
-      "id": "eagle",
-      "scene": "object3d",
-      "model": "assets/models/eagle.glb",
-      "kind": "object",
-      "label": "eagle",
-      "realSize": 0.4,
-      "up": "y",
-      "baseOffset": 0,
-      "hotspot": {
-        "type": "circle",
-        "x": 0.5,
-        "y": 0.5,
-        "r": 0.4
-      }
-    },
-    {
       "id": "japan-train",
       "scene": "movie",
       "kind": "object",

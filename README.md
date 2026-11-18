@@ -6,7 +6,7 @@
 
 A mixed-reality prototype for the Meta VR Start Developer Competition 2026 (Entertainment track, New Experience division). Pictures and films echo into your real room as 3D objects you can move with your hands.
 
-The headset starts as a clean view of your room. Open **Meta Echoes** from the dock, open a photo, or load from empty space using the hand gestures below. An MP4 in Meta Echoes is the movie flow.
+The headset starts as a clean view of your room. Open **Meta Echoes** from the dock, open a photo, or (with local API keys) load from empty space using the hand gestures below. An MP4 in Meta Echoes is the movie flow.
 
 Hosted link: `https://muhayyo-tash.github.io/scene-echoes/` (see `DEPLOY.md`).
 
@@ -16,11 +16,11 @@ Aligned with [Meta’s hands interaction types](https://developers.meta.com/hori
 
 | Gesture | What it does |
 | --- | --- |
-| **Fist** | Empty-space scene load (live API when keys are set; otherwise eagle demo) |
+| **Fist** | Empty-space scene load (local live API only; no offline demo) |
 | **Pinch** | Meta Echoes UI + open photo + 2D→3D pop |
 
-- **Fist** — hold a clear fist **out in front of you** ~1.25s (not at your sides, not while aiming at UI). This is the scene-capture gesture for **both** the Gemini → Hugging Face API path and the offline eagle fallback. Pinch alone will not spawn scene models.
-- **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch-and-hold on the open 2D print to pop its 3D model.
+- **Fist** — hold a clear fist **out in front of you** ~1s (not at your sides, not while aiming at UI). Runs only with local live conversion (`.env` keys). On GitHub Pages / no keys, fist does nothing. Pinch alone will not spawn scene models.
+- **Pinch** — thumb + index (Meta select): open the dock icon, pick a photo card, then pinch and hold on the open 2D print to pop its 3D model.
 
 ## How to run locally
 
@@ -35,8 +35,8 @@ npm run dev
 
 Open the printed HTTPS URL in the **Meta Quest Browser**. Tap **Enter**.
 
-- Pinch Meta Echoes → sofa photo → pinch-hold → `sofa.glb`
-- **Fist** held out in front (~1.25s) → **Loading…** → `eagle.glb`
+- Pinch Meta Echoes → sofa photo → pinch and hold → `sofa.glb`
+- Empty-space fist is inactive without live API keys
 
 ### Live Gemini → Hugging Face flow
 
@@ -59,24 +59,24 @@ npm run dev
 3. On Quest (same LAN), open the printed HTTPS URL, enter XR, then:
 
 - **Meta Echoes photo pinch** → Gemini names the marked object → SAM 3D Objects (Hugging Face) rebuilds a GLB → object appears in the room. If the API fails, the bundled model for that photo is used when allowed.
-- **Empty-space fist** → headset still → same Gemini → HF pipeline. If capture or conversion fails, the app falls back to `eagle.glb`.
+- **Empty-space fist** → headset still → same Gemini → HF pipeline. On failure, the load cancels (no bundled stand-in).
 
 `docs/CONVERSION_API.md` describes the JSON contract. Standalone server (optional): `npm run conversion-server`.
 
 GitHub Pages stays on bundled models because API keys never ship to the browser.
 
-Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object=eagle`, `?open=sofa`, `?handsless=1`, `?reset=1`, `?live=1`.
+Useful query flags (debug only): `?debug=1`, `?fast=1`, `?movie=ready`, `?object=sofa`, `?open=sofa`, `?handsless=1`, `?reset=1`, `?live=1`.
 
 ## Asset folder layout
 
 | Path | Role |
 | --- | --- |
 | `public/assets/photos/` | 2D images for Meta Echoes cards |
-| `public/assets/models/` | Matching GLBs (and scene-fist demos) |
+| `public/assets/models/` | Matching GLBs |
 | `public/assets/manifest.json` | Registers every object the runtime can load |
 | `public/assets/explorer.json` | Subset listed in the Meta Echoes UI |
 
-**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission. `eagle.glb` is only for empty-space fist when live APIs are unavailable; remove it (and its `manifest.json` entry) before submit if you want a leaner package.
+**Competition default:** Meta Echoes only lists the sofa photo (`explorer.json`). Sofa’s GLB must stay for submission.
 
 ## Adding a photo to Meta Echoes
 

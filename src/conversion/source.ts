@@ -63,3 +63,9 @@ export function createFilmProcessing(
 export function isManifestDefault(): boolean {
   return config.CONVERSION_MODE === 'manifest';
 }
+
+/** Empty-space fist / live convert only when local live mode is on (API worker + keys). */
+export function isLiveConversionAvailable(): boolean {
+  const liveRequested = config.CONVERSION_MODE === 'live' || debugParams.live;
+  return liveRequested && config.CONVERSION_API_URL !== CONVERSION_API_PLACEHOLDER;
+}
