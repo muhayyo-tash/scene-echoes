@@ -1002,12 +1002,12 @@ export class SceneEchoesApp {
     const dz = tip.z - head.z;
     const dist = Math.hypot(dx, dy, dz);
     if (dist < config.sceneFistMinDistance || dist > config.sceneFistMaxDistance) return false;
-    // Must be clearly in front of the face (not at your sides / behind).
+    // Must be in front of the face (not at your sides / behind).
     const flat = Math.hypot(dx, dz) || 1e-5;
     const forwardDot = (dx / flat) * forward.x + (dz / flat) * forward.z;
-    if (forwardDot < 0.5) return false;
+    if (forwardDot < 0.4) return false;
     // Roughly chest-to-eye height — dropping hands down should not count.
-    if (dy < -0.35 || dy > 0.18) return false;
+    if (dy < -0.42 || dy > 0.2) return false;
     return true;
   }
 

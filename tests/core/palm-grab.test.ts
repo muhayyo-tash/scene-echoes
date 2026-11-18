@@ -47,7 +47,7 @@ describe('palm grab (fist)', () => {
     ).toBe(false);
   });
 
-  it('rejects a Quest-style partial fist with only three curled tips', () => {
+  it('accepts a Quest-style fist with three curled tips', () => {
     const palm = { x: 0, y: 0, z: 0 };
     expect(
       isPalmGrab({
@@ -59,7 +59,7 @@ describe('palm grab (fist)', () => {
           { x: 0.1, y: 0, z: -0.01 },
         ],
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('rejects a pinch-only pose (one tip near palm)', () => {
