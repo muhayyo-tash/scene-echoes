@@ -47,5 +47,7 @@ artifacts/
 .agents/
 .claude/
 AGENTS.md
+**/AGENTS.md
 CLAUDE.md
+**/CLAUDE.md
 AI-harness-NOT-needed-to-run-app/
