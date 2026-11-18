@@ -26,12 +26,12 @@ function dist(
 
 /**
  * True when enough fingertips are clearly curled into the palm.
- * Defaults allow a solid Quest fist without needing a perfect 4-tip curl.
+ * Defaults are strict so a relaxed hand or tiny motion does not count.
  */
 export function isPalmGrab(
   joints: PalmGrabJoints,
-  curlMeters = 0.055,
-  minTips = 3,
+  curlMeters = 0.045,
+  minTips = 4,
 ): boolean {
   const palm = joints.palm;
   if (!palm) return false;
@@ -42,6 +42,6 @@ export function isPalmGrab(
     seen += 1;
     if (dist(tip, palm) <= curlMeters) curled += 1;
   }
-  // Need enough tracked tips; 3 curled of 4 is a usable Quest fist.
+  // Need a full tracked fist — missing or loose tips should not count.
   return seen >= minTips && curled >= minTips;
 }

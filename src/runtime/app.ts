@@ -942,7 +942,7 @@ export class SceneEchoesApp {
       const tip = holding.palm ?? holding.pinchPosition ?? holding.indexTip;
       if (tip) pos = new Vector3(tip.x, tip.y, tip.z);
     } else if (this.sceneFistOrigin && this.sceneFistMiss <= config.sceneFistMissGraceSeconds) {
-      // Tracking flicker: keep counting at the last fist position.
+      // Short tracking flicker only — do not keep counting through movement.
       pos = this.sceneFistOrigin.clone();
     }
     if (!pos) return;
@@ -951,16 +951,15 @@ export class SceneEchoesApp {
       this.sceneFistOrigin = pos.clone();
       this.sceneFistHold = 0;
     } else if (holding && pos.distanceTo(this.sceneFistOrigin) > config.sceneFistMoveTolerance) {
-      // Large wander: re-anchor without wiping all progress.
-      this.sceneFistOrigin.copy(pos);
-      this.sceneFistHold = Math.max(0, this.sceneFistHold - 0.25);
-      if (this.sceneFistHold < 0.35 && !this.converting && !this.pendingConverted) {
-        this.conversion.finish();
-      }
+      // Any real wander cancels the hold — tiny motion must not finish a load.
+      this.sceneFistOrigin = null;
+      this.sceneFistHold = 0;
+      if (!this.converting && !this.pendingConverted) this.conversion.finish();
+      return;
     }
 
     this.sceneFistHold += dt;
-    if (this.sceneFistHold >= 0.35 && this.sceneFistHold < config.sceneFistHoldSeconds) {
+    if (this.sceneFistHold >= 0.45 && this.sceneFistHold < config.sceneFistHoldSeconds) {
       this.conversion.start(pos, true, 'Hold fist…');
     }
     if (this.sceneFistHold < config.sceneFistHoldSeconds) return;
@@ -1003,12 +1002,12 @@ export class SceneEchoesApp {
     const dz = tip.z - head.z;
     const dist = Math.hypot(dx, dy, dz);
     if (dist < config.sceneFistMinDistance || dist > config.sceneFistMaxDistance) return false;
-    // Must be in front of the face (not at your sides / behind).
+    // Must be clearly in front of the face (not at your sides / behind).
     const flat = Math.hypot(dx, dz) || 1e-5;
     const forwardDot = (dx / flat) * forward.x + (dz / flat) * forward.z;
-    if (forwardDot < 0.3) return false;
+    if (forwardDot < 0.5) return false;
     // Roughly chest-to-eye height — dropping hands down should not count.
-    if (dy < -0.48 || dy > 0.22) return false;
+    if (dy < -0.35 || dy > 0.18) return false;
     return true;
   }
 
